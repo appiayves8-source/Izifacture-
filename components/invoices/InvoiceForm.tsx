@@ -7,19 +7,14 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
-  FileText,
   Calendar,
   User,
   Building2,
   CheckCircle,
-  Clock,
   Send,
   Save,
-  Percent,
   CreditCard,
   Sparkles,
-  Trophy,
-  Zap,
 } from 'lucide-react';
 import { useInvoiceStore, Invoice, InvoiceItem } from '@/lib/store/invoiceStore';
 import { useSettingsStore } from '@/lib/store/settingsStore';
@@ -38,12 +33,10 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
   const quoteId = searchParams.get('quoteId');
   const fromQuote = searchParams.get('from') === 'quote';
 
-  const { clients, addInvoice, updateInvoice, isLoaded } = useInvoiceStore();
+  const { clients, addInvoice, updateInvoice } = useInvoiceStore();
   const { settings } = useSettingsStore();
   const {
     isActive,
-    invoicesCount,
-    maxFreeInvoices,
     hasReachedLimit,
     incrementInvoiceCount,
   } = useSubscription();

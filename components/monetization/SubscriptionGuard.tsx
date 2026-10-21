@@ -3,7 +3,6 @@
 import React from 'react';
 import { useSubscription, MAX_FREE_INVOICES } from '@/lib/hooks/useSubscription';
 import {
-  Sparkles,
   Lock,
   ArrowRight,
   ShieldCheck,
