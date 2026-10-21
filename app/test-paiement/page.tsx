@@ -27,7 +27,7 @@ interface CertificationTransaction {
   transaction_id: string;
   amount: number;
   currency: string;
-  status: 'ACCEPTED' | 'PENDING' | 'REFUSED' | 'UNKNOWN';
+  status: 'ACCEPTED' | 'PENDING' | 'REFUSED' | 'UNKNOWN' | string;
   operator_id?: string;
   payment_method?: string;
   date: string;
@@ -203,19 +203,17 @@ function TestPaymentContent() {
         setTransactions((prev) => {
           const exists = prev.some((t) => t.transaction_id === idToVerify);
           if (!exists) {
-            const updated = [
-              {
-                id: `cert-${Date.now()}`,
-                transaction_id: idToVerify,
-                amount: TEST_AMOUNT,
-                currency: 'XOF',
-                status: 'ACCEPTED',
-                operator_id: data.operator_id || 'MTN_CI_SANDBOX',
-                payment_method: data.payment_method || 'MTN Mobile Money CI',
-                date: new Date().toLocaleString('fr-FR'),
-              },
-              ...prev,
-            ];
+            const newTx: CertificationTransaction = {
+              id: `cert-${Date.now()}`,
+              transaction_id: idToVerify,
+              amount: TEST_AMOUNT,
+              currency: 'XOF',
+              status: 'ACCEPTED',
+              operator_id: data.operator_id || 'MTN_CI_SANDBOX',
+              payment_method: data.payment_method || 'MTN Mobile Money CI',
+              date: new Date().toLocaleString('fr-FR'),
+            };
+            const updated: CertificationTransaction[] = [newTx, ...prev];
             saveTransactions(updated);
             addLog('success', `🎉 Transaction ${idToVerify} validée avec succès et comptabilisée dans la certification !`);
             return updated;
