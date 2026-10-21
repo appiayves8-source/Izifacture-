@@ -1,0 +1,15 @@
+project_id = "cdtqzdfxhustrnndinxs"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "auth"]
+
+[functions.create-subscription-payment]
+verify_jwt = true
+
+[functions.cinetpay-webhook]
+verify_jwt = false
+
+[functions.check-subscription]
+verify_jwt = true
