@@ -12,6 +12,14 @@ import {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Log de diagnostic — vérifie la présence des variables d'env CinetPay
+    console.log('[CINETPAY_CALL]', {
+      site_id: process.env.CINETPAY_SITE_ID,
+      has_key: !!process.env.CINETPAY_API_KEY,
+      has_password: !!process.env.CINETPAY_API_PASSWORD,
+      has_secret: !!process.env.CINETPAY_SECRET_KEY,
+    });
+
     const body = await req.json().catch(() => ({}));
     const invoiceId = String(body.invoiceId || body.invoice_id || '').trim();
 
@@ -116,12 +124,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (!result.success || !result.payment_url) {
-      console.error('[CINETPAY_INIT] Échec création lien de paiement:', result);
+      console.error('[CINETPAY_INIT] ❌ Échec création lien de paiement:', result);
+      // Retourner le VRAI message CinetPay, jamais le message générique
+      const errorMessage =
+        result.message ||
+        'Paiement indisponible — voire les logs Vercel ([CINETPAY_RAW]) pour la vraie cause';
       return NextResponse.json(
-        {
-          success: false,
-          error: result.message || 'Paiement temporairement indisponible, réessayez.',
-        },
+        { success: false, error: errorMessage },
         { status: 502 }
       );
     }
@@ -147,9 +156,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error('[CINETPAY_INIT] Erreur serveur inattendue:', errorMsg);
+    console.error('[CINETPAY_INIT] ❌ Erreur serveur inattendue:', errorMsg);
     return NextResponse.json(
-      { success: false, error: 'Paiement temporairement indisponible, réessayez.' },
+      { success: false, error: `Erreur serveur : ${errorMsg}` },
       { status: 500 }
     );
   }
