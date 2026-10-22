@@ -43,6 +43,9 @@ export interface Invoice {
   serviceType: string;
   notes?: string;
   paymentMethod?: string;
+  paymentStatus?: string;
+  cinetpayTransactionId?: string;
+  paidAt?: string;
 }
 
 // ─── Données initiales ────────────────────────────────────────────────────────
@@ -169,6 +172,9 @@ function mapDbToInvoice(row: DbRow, clientsList: Client[]): Invoice {
     taxAmount: Number(row.tax_amount || 0),
     amount: Number(row.amount || 0),
     paymentMethod: row.payment_method || undefined,
+    paymentStatus: (row.payment_status as string) || undefined,
+    cinetpayTransactionId: (row.cinetpay_transaction_id as string) || undefined,
+    paidAt: (row.paid_at as string) || undefined,
     notes: row.notes || undefined,
     items,
   };

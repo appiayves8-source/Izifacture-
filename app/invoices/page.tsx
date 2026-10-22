@@ -13,6 +13,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   AlertCircle,
+  Link2,
+  Check,
 } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { useInvoiceStore, InvoiceStatus } from '@/lib/store/invoiceStore';
@@ -28,6 +30,16 @@ export default function InvoicesListPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyPaymentLink = (invoiceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (typeof window === 'undefined') return;
+    const url = `${window.location.origin}/pay/${invoiceId}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(invoiceId);
+    setTimeout(() => setCopiedId(null), 2500);
+  };
 
   // Synchronisation du filtre depuis l'URL (?status=payee, etc.)
   React.useEffect(() => {
@@ -117,38 +129,58 @@ export default function InvoicesListPage() {
     return range;
   }, [safePage, totalPages]);
 
-  const getStatusBadge = (status: InvoiceStatus) => {
-    switch (status) {
-      case 'payee':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#D4AF37]/15 text-[#F5E6B3] border border-[#D4AF37]/35 shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] shadow-[0_0_6px_rgba(212,175,55,0.8)]"></span>
-            Payée
-          </span>
-        );
-      case 'envoyee':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/30 text-amber-300 border border-amber-600/35">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            Envoyée
-          </span>
-        );
-      case 'en_retard':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-950/40 text-red-300 border border-red-800/40">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
-            En retard
-          </span>
-        );
-      case 'brouillon':
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-slate-300 border border-slate-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-            Brouillon
-          </span>
-        );
+  const getStatusBadge = (status: InvoiceStatus, paymentStatus?: string) => {
+    // 1. Vert = paid
+    if (paymentStatus === 'paid' || status === 'payee') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>
+          Payée
+        </span>
+      );
     }
+    // 2. Jaune = pending_payment
+    if (paymentStatus === 'pending') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+          En attente paiement
+        </span>
+      );
+    }
+    // 3. Rouge = failed
+    if (paymentStatus === 'failed') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-950/50 text-red-300 border border-red-800/50 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+          Échoué
+        </span>
+      );
+    }
+    // 4. Gris = envoyée
+    if (status === 'envoyee') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+          Envoyée
+        </span>
+      );
+    }
+    if (status === 'en_retard') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-950/40 text-red-300 border border-red-800/40">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+          En retard
+        </span>
+      );
+    }
+    // Brouillon
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-slate-400 border border-slate-700">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+        Brouillon
+      </span>
+    );
   };
 
   return (
@@ -349,14 +381,34 @@ export default function InvoicesListPage() {
 
                     {/* Status badge */}
                     <td className="py-3.5 px-5 text-center">
-                      {getStatusBadge(invoice.status)}
+                      {getStatusBadge(invoice.status, invoice.paymentStatus)}
                     </td>
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Bouton Copier le lien de paiement direct */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyPaymentLink(invoice.id, e)}
+                          title="Copier le lien public CinetPay pour le client"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#181926] hover:bg-[#202234] border border-[#D4AF37]/25 text-xs text-[#F5E6B3] hover:text-white transition-all active:scale-95 cursor-pointer"
+                        >
+                          {copiedId === invoice.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-emerald-400 text-[11px] font-bold">Lien copié !</span>
+                            </>
+                          ) : (
+                            <>
+                              <Link2 className="w-3.5 h-3.5 text-[#D4AF37]" />
+                              <span className="text-[11px] hidden md:inline">Lien de paiement</span>
+                            </>
+                          )}
+                        </button>
+
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#E5C158] hover:text-amber-200">
-                          <span>Détails</span>
+                          <span className="hidden sm:inline">Détails</span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </span>
                       </div>
