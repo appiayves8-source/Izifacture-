@@ -66,6 +66,7 @@ export default function RecentInvoicesTable() {
 
         <Link
           href="/invoices"
+          prefetch={true}
           className="inline-flex items-center gap-1 text-xs font-bold text-[#E5C158] hover:text-amber-200 hover:underline transition-colors"
         >
           <span>Voir tout ({invoices.length})</span>
@@ -93,6 +94,7 @@ export default function RecentInvoicesTable() {
               return (
                 <tr
                   key={invoice.id}
+                  onMouseEnter={() => router.prefetch(`/invoices/${invoice.id}`)}
                   onClick={() => router.push(`/invoices/${invoice.id}`)}
                   className={`group transition-colors hover:bg-white/[0.04] cursor-pointer ${
                     isFirst ? 'bg-[#D4AF37]/[0.05]' : ''

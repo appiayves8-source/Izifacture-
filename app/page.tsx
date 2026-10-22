@@ -148,6 +148,7 @@ export default function DashboardOverviewPage() {
           {/* Primary Call to Action */}
           <Link
             href="/invoices/new"
+            prefetch={true}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#DFBA55] via-[#D4AF37] to-[#B8860B] hover:from-[#E8C86A] hover:to-[#C69214] text-black text-xs font-bold shadow-[0_2px_15px_rgba(212,175,55,0.3)] hover:shadow-[0_4px_22px_rgba(212,175,55,0.5)] active:scale-95 transition-all duration-200"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />

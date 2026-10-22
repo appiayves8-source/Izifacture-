@@ -91,16 +91,18 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [logoutSuccessToast, setLogoutSuccessToast] = useState(false);
 
-  const handleConfirmLogout = async () => {
+  // Prélèvement anticipé de la page de connexion pour une ouverture instantanée
+  useEffect(() => {
+    router.prefetch('/login');
+  }, [router]);
+
+  const handleConfirmLogout = () => {
     setLogoutModalOpen(false);
     if (onClose) onClose();
-    try {
-      await signOut();
-      router.push('/login');
-    } catch (e) {
-      console.warn('Logout error:', e);
-      router.push('/login');
-    }
+    // 1. Redirection immédiate sans attendre l'appel réseau
+    router.push('/login');
+    // 2. Déconnexion asynchrone non-bloquante
+    signOut();
   };
 
   // Lock background scroll when mobile menu is open
@@ -132,6 +134,8 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
+                  onMouseEnter={() => router.prefetch(item.href)}
                   onClick={() => onClose && onClose()}
                   className={`group flex items-center justify-between rounded-xl font-medium transition-all duration-200 ${
                     isMobile

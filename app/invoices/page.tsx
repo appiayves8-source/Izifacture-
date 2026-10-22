@@ -29,6 +29,17 @@ export default function InvoicesListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Synchronisation du filtre depuis l'URL (?status=payee, etc.)
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('status');
+      if (s && ['all', 'payee', 'envoyee', 'en_retard', 'brouillon'].includes(s)) {
+        setSelectedStatus(s);
+      }
+    }
+  }, []);
+
   // Filter options
   const filterTabs = [
     { key: 'all', label: 'Toutes les factures', count: invoices.length },

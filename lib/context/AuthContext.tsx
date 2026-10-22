@@ -221,13 +221,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // 1. Réinitialiser immédiatement l'état React pour une transition instantanée (0 ms)
+    setUser(null);
+    setSession(null);
+
+    // 2. Nettoyage immédiat des caches locaux
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('izifacture_sub_cache_v1');
+      } catch {}
+    }
+
+    // 3. Déconnexion locale immédiate et révocation distante en tâche de fond (non bloquante)
     try {
-      await supabase.auth.signOut();
+      supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     } catch (err) {
       console.warn('Erreur déconnexion:', err);
-    } finally {
-      setUser(null);
-      setSession(null);
     }
   };
 

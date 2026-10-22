@@ -137,6 +137,7 @@ export default function LatestInvoiceCard() {
         <div className="flex items-center gap-2">
           <Link
             href={`/invoices/${latest.id}`}
+            prefetch={true}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#181926] hover:bg-[#202234] text-slate-200 border border-[#D4AF37]/25 font-semibold text-xs transition-colors"
           >
             <span>Consulter le détail</span>
