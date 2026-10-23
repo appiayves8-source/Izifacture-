@@ -84,7 +84,6 @@ export interface SubscriptionState {
   isInitiating: boolean;
   refreshSubscription: () => Promise<boolean>;
   initiatePayment: () => Promise<void>;
-  activateSandboxDirect: () => Promise<void>;
   incrementInvoiceCount: () => Promise<number>;
 }
 
@@ -102,7 +101,6 @@ const defaultState: SubscriptionState = {
   isInitiating: false,
   refreshSubscription: async () => false,
   initiatePayment: async () => {},
-  activateSandboxDirect: async () => {},
   incrementInvoiceCount: async () => 0,
 };
 
@@ -348,54 +346,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  // ── Activation directe Sandbox / Mode Test ─────────────────────────────────
-  const activateSandboxDirect = async () => {
-    try {
-      setIsInitiating(true);
-      setError(null);
-
-      const currentSession = session || (await supabase.auth.getSession()).data.session;
-      const token = currentSession?.access_token;
-
-      if (!token || !user) {
-        throw new Error('Session expirée. Veuillez vous reconnecter.');
-      }
-
-      const response = await fetch('/api/subscription/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ sandbox_direct: true }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.activated) {
-        // Fallback direct Supabase
-        const now = new Date();
-        const ends = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          email: user.email,
-          is_subscribed: true,
-          subscription_ends_at: ends,
-          updated_at: now.toISOString(),
-        });
-      }
-
-      // Invalider cache et recharger
-      clearCache();
-      await refreshSubscription();
-      setIsInitiating(false);
-    } catch (err: unknown) {
-      console.error('[SubscriptionContext] activateSandboxDirect:', err);
-      setError((err as Error).message || "Erreur d'activation test.");
-      setIsInitiating(false);
-    }
-  };
-
   const hasReachedLimit = !isActive && invoicesCount >= MAX_FREE_INVOICES;
 
   const value: SubscriptionState = {
@@ -412,7 +362,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     isInitiating,
     refreshSubscription,
     initiatePayment,
-    activateSandboxDirect,
     incrementInvoiceCount,
   };
 

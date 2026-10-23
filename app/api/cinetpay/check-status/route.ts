@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { checkCinetPayTransaction } from '@/lib/cinetpay';
 
 /**
  * POST /api/cinetpay/check-status
- * Vérifie le statut d'un paiement en cours pour la page de retour ou l'actualisation
+ * Vérifie le statut d'un paiement en direct pour la page de retour client (/payment/return)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -18,16 +18,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`[CINETPAY_CHECK_STATUS] Requête statut pour ${transactionId}`);
-
-    // 1. Consultation de la base locale
-    const { data: localPayment } = await supabase
+    // 1. Consultation de la base de données
+    const { data: localPayment } = await supabaseAdmin
       .from('payments')
       .select('*, invoice:invoices(*)')
       .eq('transaction_id', transactionId)
       .maybeSingle();
 
-    // 2. Interrogation directe de CinetPay
+    // 2. Interrogation officielle de CinetPay
     const check = await checkCinetPayTransaction(transactionId);
     const nowIso = new Date().toISOString();
 
@@ -35,31 +33,33 @@ export async function POST(req: NextRequest) {
     if (check.status === 'ACCEPTED') {
       const invoiceId = localPayment?.invoice_id;
 
-      await supabase.from('payments').upsert(
+      await supabaseAdmin.from('payments').upsert(
         {
           transaction_id: transactionId,
           status: 'accepted',
+          amount: check.amount || localPayment?.amount || 0,
+          currency: check.currency || 'XOF',
           payment_method: check.payment_method || localPayment?.payment_method || 'CinetPay',
           updated_at: nowIso,
-          raw_check: (check.raw as Record<string, unknown>) || null,
         },
         { onConflict: 'transaction_id' }
       );
 
       if (invoiceId) {
-        await supabase
+        await supabaseAdmin
           .from('invoices')
           .update({
             payment_status: 'paid',
             status: 'payee',
             paid_at: nowIso,
             payment_reference: transactionId,
+            payment_method: check.payment_method || 'CinetPay Mobile Money / Wave / CB',
             updated_at: nowIso,
           })
           .eq('id', invoiceId);
       }
     } else if (check.status === 'REFUSED' || check.status === 'FAILED') {
-      await supabase.from('payments').upsert(
+      await supabaseAdmin.from('payments').upsert(
         {
           transaction_id: transactionId,
           status: 'refused',
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('[CINETPAY_CHECK_STATUS] Erreur:', errorMsg);
     return NextResponse.json(
-      { success: false, error: 'Erreur lors de la vérification du statut', details: errorMsg },
+      { success: false, error: 'Erreur lors de la vérification du statut' },
       { status: 500 }
     );
   }
@@ -98,7 +98,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'transaction_id requis' }, { status: 400 });
   }
 
-  // Déléguer au handler POST
   const fakeReq = new NextRequest(req.url, {
     method: 'POST',
     body: JSON.stringify({ transaction_id: transactionId }),

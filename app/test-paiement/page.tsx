@@ -47,6 +47,28 @@ const TEST_OTP = '123456';
 const TEST_AMOUNT = 100;
 
 function TestPaymentContent() {
+  if (process.env.NODE_ENV === 'production') {
+    return (
+      <div className="min-h-screen bg-[#090A0F] text-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#12131C] border border-[#D4AF37]/30 rounded-3xl p-8 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-300">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <h1 className="text-xl font-bold">Environnement Production Actif</h1>
+          <p className="text-xs text-slate-400">
+            Le laboratoire de certification Sandbox CinetPay est désactivé en production. Les paiements réels s&apos;effectuent directement sur vos factures.
+          </p>
+          <Link
+            href="/"
+            className="inline-block mt-3 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#DFBA55] to-[#B8860B] text-black text-xs font-bold shadow-md"
+          >
+            Retourner au tableau de bord
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const searchParams = useSearchParams();
   const urlTransactionId = searchParams.get('transaction_id') || searchParams.get('id');
   const urlStatus = searchParams.get('status');

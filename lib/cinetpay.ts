@@ -1,33 +1,32 @@
 /**
- * Module Centralisé CinetPay V2 — IziFacture
+ * Module Centralisé CinetPay V2 — IziFacture Production-Ready
  *
- * IS_TEST_MODE = true  → Mode sandbox CinetPay actif (paiements simulés)
- * IS_TEST_MODE = false → Mode LIVE (paiements réels)
+ * Conforme aux spécifications FinTech UEMOA / OHADA (Côte d'Ivoire & Afrique de l'Ouest).
+ * Supporte : Wave, Orange Money, MTN MoMo, Moov Money et Cartes Bancaires (Visa / Mastercard).
  *
- * Variables d'env utilisées (Vercel) :
- *   CINETPAY_API_KEY, CINETPAY_SITE_ID,
- *   CINETPAY_API_PASSWORD, CINETPAY_SECRET_KEY,
- *   NEXT_PUBLIC_APP_URL
+ * Variables d'environnement de Production :
+ * - CINETPAY_API_KEY      : Clé API CinetPay LIVE (fournie par CinetPay)
+ * - CINETPAY_SITE_ID      : Identifiant de site CinetPay LIVE
+ * - CINETPAY_SECRET_KEY   : Clé secrète CinetPay (pour validation HMAC x-token)
+ * - NEXT_PUBLIC_APP_URL   : URL publique de production (ex: https://izifacture-fawn.vercel.app)
  */
 
-// ─── 🔴 INTERRUPTEUR TEST / LIVE — mettre false quand CinetPay valide le compte LIVE
-const IS_TEST_MODE = true;
+import crypto from 'crypto';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
 export interface CinetPayConfig {
   apiKey: string;
   siteId: string;
-  apiPassword?: string;
-  secretKey?: string;
+  secretKey: string;
   appUrl: string;
-  isTest: boolean;
 }
 
 export interface CinetPayInitParams {
   transaction_id: string;
   amount: number;
-  description: string;
+  currency?: string; // Par défaut 'XOF'
+  description?: string;
   invoice_number?: string;
   customer_name?: string;
   customer_surname?: string;
@@ -35,22 +34,22 @@ export interface CinetPayInitParams {
   customer_phone?: string;
   customer_address?: string;
   customer_city?: string;
-  customer_country?: string;
+  customer_country?: string; // Code ISO 2 lettres : 'CI', 'SN', etc.
   customer_state?: string;
   customer_zip_code?: string;
   notify_url?: string;
   return_url?: string;
-  metadata?: Record<string, unknown>;
+  channels?: 'ALL' | 'MOBILE_MONEY' | 'CREDIT_CARD' | 'WALLET';
+  metadata?: Record<string, unknown> | string;
 }
 
 export interface CinetPayInitResult {
   success: boolean;
-  payment_url?: string;
   transaction_id: string;
+  payment_url?: string;
   payment_token?: string;
   code?: string | number;
   message?: string;
-  raw?: unknown;
 }
 
 export interface CinetPayCheckResult {
@@ -64,67 +63,68 @@ export interface CinetPayCheckResult {
   payment_date?: string;
   code?: string | number;
   message?: string;
+  description?: string;
   raw?: unknown;
 }
 
-// ─── 1. Configuration & Mode TEST/LIVE ───────────────────────────────────────
+// ─── URLs officielles CinetPay V2 (jamais via variable d'env) ───────────────
+const CINETPAY_CHECKOUT_URL = 'https://api-checkout.cinetpay.com/v2/payment';
+const CINETPAY_CHECK_URL    = 'https://api-checkout.cinetpay.com/v2/payment/check';
+
+// ─── 1. Configuration Centralisée ───────────────────────────────────────────
 
 /**
- * Retourne true si IS_TEST_MODE est activé (interrupteur manuel en haut du fichier)
- */
-export function isTestMode(): boolean {
-  return IS_TEST_MODE;
-}
-
-/**
- * Récupère la configuration CinetPay centralisée.
- * En mode TEST : utilise CINETPAY_TEST_API_KEY / CINETPAY_TEST_SITE_ID si définis,
- * sinon retombe sur CINETPAY_API_KEY / CINETPAY_SITE_ID (avec metadata test injectée).
+ * Récupère et valide la configuration CinetPay LIVE
  */
 export function getCinetPayConfig(): CinetPayConfig {
-  // Log du mode actif — visible dans les logs Vercel à chaque appel
-  console.log('[MODE]', IS_TEST_MODE ? 'TEST 🧪' : 'LIVE 🟢');
+  const apiKey    = (process.env.CINETPAY_API_KEY || '').trim();
+  const siteId    = (process.env.CINETPAY_SITE_ID || '').trim();
+  const secretKey = (process.env.CINETPAY_SECRET_KEY || '').trim();
 
-  // En mode TEST : préférer les clés TEST dédiées si présentes dans Vercel
-  const apiKey = IS_TEST_MODE
-    ? (process.env.CINETPAY_TEST_API_KEY || process.env.CINETPAY_API_KEY || '')
-    : (process.env.CINETPAY_API_KEY || '');
-
-  const siteId = IS_TEST_MODE
-    ? (process.env.CINETPAY_TEST_SITE_ID || process.env.CINETPAY_SITE_ID || '')
-    : (process.env.CINETPAY_SITE_ID || '');
-
-  const apiPassword = process.env.CINETPAY_API_PASSWORD || '';
-  const secretKey   = process.env.CINETPAY_SECRET_KEY   || '';
-  const appUrl = (
+  // URL publique en HTTPS
+  let appUrl = (
     process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
     'https://izifacture-fawn.vercel.app'
-  ).replace(/\/$/, '');
+  ).trim().replace(/\/$/, '');
 
-  console.log('[CINETPAY_CONFIG]', {
-    mode:    IS_TEST_MODE ? 'TEST' : 'LIVE',
-    site_id: siteId,
-    has_key: !!apiKey,
-  });
+  // Forcer HTTPS en production
+  if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://')) {
+    appUrl = appUrl.replace('http://', 'https://');
+  }
 
   return {
     apiKey,
     siteId,
-    apiPassword,
     secretKey,
     appUrl,
-    isTest: IS_TEST_MODE,
   };
 }
 
 /**
- * Génère un identifiant de transaction UNIQUE — format : IZI-${Date.now()}-${random}
- * Garantit l'unicité grâce au timestamp en ms + entropy aléatoire.
+ * Valide que les identifiants requis sont présents.
+ * Lève une exception ou retourne un message d'erreur clair.
+ */
+export function validateCinetPayConfig(): { valid: boolean; missing: string[] } {
+  const config = getCinetPayConfig();
+  const missing: string[] = [];
+  if (!config.apiKey) missing.push('CINETPAY_API_KEY');
+  if (!config.siteId) missing.push('CINETPAY_SITE_ID');
+  return {
+    valid: missing.length === 0,
+    missing,
+  };
+}
+
+/**
+ * Génère un identifiant de transaction UNIQUE, robuste et idempotent (< 20 caractères)
+ * Format : IZI-${Date.now() en base36}-${4 caractères aléatoires}
+ * Ex : IZI-MCZ0AB3-7K2X (18 caractères)
  */
 export function generateTransactionId(_invoiceId?: string): string {
-  const ts = Date.now().toString(36).toUpperCase();     // base36, court
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase(); // 4 chars aléatoires
-  return `IZI-${ts}-${rand}`.slice(0, 20); // ≤ 20 chars max CinetPay
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `IZI-${ts}-${rand}`.slice(0, 20);
 }
 
 // ─── 2. Client HTTP avec Timeout 10s ────────────────────────────────────────
@@ -146,31 +146,25 @@ async function fetchWithTimeout(
   }
 }
 
-// ─── URLs officielles CinetPay (jamais via variable d'env) ─────────────────
-const CINETPAY_CHECKOUT_URL = 'https://api-checkout.cinetpay.com/v2/payment';
-const CINETPAY_CHECK_URL    = 'https://api-checkout.cinetpay.com/v2/payment/check';
-
 // ─── 3. Initialisation de Paiement (CinetPay V2 Checkout) ─────────────────────
 
 /**
- * Initialise un paiement CinetPay sécurisé pour une facture.
- * Utilise l'URL officielle en dur : CINETPAY_CHECKOUT_URL.
+ * Initialise un paiement CinetPay sécurisé pour une facture ou un abonnement.
+ * 100 % Production-Ready : aucune donnée mockée ou écrasée.
  */
 export async function initCinetPayPayment(
   params: CinetPayInitParams
 ): Promise<CinetPayInitResult> {
   const config = getCinetPayConfig();
+  const { valid, missing } = validateCinetPayConfig();
 
-  // Validation des variables d'environnement obligatoires
-  if (!config.apiKey || !config.siteId) {
-    const missing = [!config.apiKey && 'CINETPAY_API_KEY', !config.siteId && 'CINETPAY_SITE_ID']
-      .filter(Boolean)
-      .join(', ');
-    console.error(`[CINETPAY_INIT] ❌ Variables manquantes : ${missing}`);
+  if (!valid) {
+    const missingStr = missing.join(', ');
+    console.error(`[CINETPAY_INIT] Configuration incomplète : ${missingStr} manquant(s) dans l'environnement.`);
     return {
       success: false,
       transaction_id: params.transaction_id,
-      message: `Configuration CinetPay incomplète : ${missing} manquant(s)`,
+      message: `Configuration de paiement incomplète : variable(s) ${missingStr} non configurée(s) sur Vercel.`,
     };
   }
 
@@ -179,18 +173,30 @@ export async function initCinetPayPayment(
     return {
       success: false,
       transaction_id: params.transaction_id,
-      message: 'Le montant minimum de paiement CinetPay est de 100 FCFA',
+      message: 'Le montant minimum de paiement en ligne est de 100 FCFA.',
     };
   }
 
+  // Nettoyage et normalisation des informations client
+  const customerName = (params.customer_name || 'Client').trim().slice(0, 50);
+  const customerSurname = (params.customer_surname || 'IziFacture').trim().slice(0, 50);
+  const customerEmail = (params.customer_email || 'contact@izifacture.com').trim().toLowerCase();
+  const customerPhone = (params.customer_phone || '').trim().replace(/[\s-]/g, '');
+
+  // Validation du téléphone : au moins 8 chiffres
+  if (!customerPhone || customerPhone.length < 8) {
+    return {
+      success: false,
+      transaction_id: params.transaction_id,
+      message: 'Un numéro de téléphone valide (Mobile Money / Wave) est requis pour initialiser le paiement.',
+    };
+  }
+
+  const countryCode = (params.customer_country || 'CI').trim().toUpperCase().slice(0, 2);
   const notifyUrl = params.notify_url || `${config.appUrl}/api/cinetpay/notify`;
   const returnUrl =
     params.return_url ||
-    `${config.appUrl}/payment/return?transaction_id=${params.transaction_id}`;
-
-  console.log(
-    `[CINETPAY_INIT] Appel ${CINETPAY_CHECKOUT_URL} | tx=${params.transaction_id} | amount=${intAmount} XOF | site_id=${config.siteId}`
-  );
+    `${config.appUrl}/payment/return?transaction_id=${encodeURIComponent(params.transaction_id)}`;
 
   try {
     const v2Payload: Record<string, unknown> = {
@@ -198,27 +204,25 @@ export async function initCinetPayPayment(
       site_id: config.siteId,
       transaction_id: params.transaction_id,
       amount: intAmount,
-      currency: 'XOF',
-      description: params.description || `Facture ${params.invoice_number || params.transaction_id}`,
-      customer_name: params.customer_name || 'Client',
-      customer_surname: params.customer_surname || 'IziFacture',
-      customer_email: params.customer_email || 'client@izifacture.com',
-      customer_phone_number: params.customer_phone || '0700000000',
+      currency: params.currency || 'XOF',
+      description: params.description || `Règlement facture ${params.invoice_number || params.transaction_id}`,
+      customer_name: customerName,
+      customer_surname: customerSurname,
+      customer_email: customerEmail,
+      customer_phone_number: customerPhone,
       customer_address: params.customer_address || 'Abidjan',
       customer_city: params.customer_city || 'Abidjan',
-      customer_country: params.customer_country || 'CI',
-      customer_state: params.customer_state || 'CI',
+      customer_country: countryCode,
+      customer_state: params.customer_state || countryCode,
       customer_zip_code: params.customer_zip_code || '00225',
       notify_url: notifyUrl,
       return_url: returnUrl,
-      channels: 'ALL',
+      channels: params.channels || 'ALL',
       lang: 'fr',
-      invoice_data: params.metadata || { invoice_number: params.invoice_number },
+      invoice_data: typeof params.metadata === 'object' ? params.metadata : { ref: params.transaction_id },
     };
 
-    if (config.isTest) {
-      v2Payload.metadata = 'test';
-    }
+    console.log(`[CINETPAY_INIT] Appel CinetPay Checkout V2 | tx=${params.transaction_id} | amount=${intAmount} ${v2Payload.currency}`);
 
     const res = await fetchWithTimeout(
       CINETPAY_CHECKOUT_URL,
@@ -228,25 +232,22 @@ export async function initCinetPayPayment(
         body: JSON.stringify(v2Payload),
         cache: 'no-store',
       },
-      10000
+      12000
     );
 
     const data = await res.json().catch(() => null);
-
-    // ⚠️ Log brut OBLIGATOIRE — révèle la vraie réponse CinetPay dans Vercel
-    console.log('[CINETPAY_RAW]', JSON.stringify(data));
 
     if (!data) {
       return {
         success: false,
         transaction_id: params.transaction_id,
-        message: `CinetPay: réponse HTTP ${res.status} non-JSON (vérifiez les credentials)`,
+        message: `Réponse HTTP ${res.status} invalide reçue de CinetPay. Veuillez vérifier vos identifiants LIVE.`,
       };
     }
 
-    // Succès : code 201 = paiement initié avec URL de redirection
+    // Code 201 = succès CinetPay V2
     if ((data.code === '201' || data.code === 201) && data.data?.payment_url) {
-      console.log(`[CINETPAY_INIT] ✅ Lien de paiement généré : ${data.data.payment_url}`);
+      console.log(`[CINETPAY_INIT] Succès : lien généré pour tx=${params.transaction_id}`);
       return {
         success: true,
         transaction_id: params.transaction_id,
@@ -254,57 +255,51 @@ export async function initCinetPayPayment(
         payment_token: data.data.payment_token,
         code: data.code,
         message: data.message || 'Paiement initié avec succès',
-        raw: data,
       };
     }
 
-    // Échec CinetPay : retourner le VRAI message, jamais le message générique
     const realMessage =
       data.message ||
       data.description ||
       data.data?.message ||
-      `Erreur CinetPay code=${data.code} — vérifiez CINETPAY_API_KEY et CINETPAY_SITE_ID sur Vercel`;
+      `Échec CinetPay (Code ${data.code}). Vérifiez vos identifiants LIVE sur Vercel.`;
 
-    console.error(
-      `[CINETPAY_INIT] ❌ Rejet CinetPay : code=${data.code} | "${realMessage}"`
-    );
+    console.error(`[CINETPAY_INIT] Rejet CinetPay : code=${data.code} | message="${realMessage}"`);
 
     return {
       success: false,
       transaction_id: params.transaction_id,
       code: data.code,
       message: realMessage,
-      raw: data,
     };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[CINETPAY_INIT] ❌ Erreur réseau/timeout vers CinetPay : ${errMsg}`);
+    console.error(`[CINETPAY_INIT] Erreur réseau vers CinetPay : ${errMsg}`);
     return {
       success: false,
       transaction_id: params.transaction_id,
-      message: `Erreur réseau CinetPay : ${errMsg}`,
+      message: `Erreur de communication avec la plateforme de paiement : ${errMsg}`,
     };
   }
 }
 
-// ─── 4. Vérification Sécurisée du Statut (checkPayStatus) ─────────────────────
+// ─── 4. Vérification Serveur du Statut (checkPayStatus) ─────────────────────
 
 /**
- * Vérifie le statut réel d'une transaction directement auprès de CinetPay.
- * Ne fait jamais confiance au seul corps d'une requête webhook sans contre-vérification.
+ * Vérifie le statut officiel d'une transaction auprès de CinetPay (/v2/payment/check).
+ * RÈGLE D'OR : Ne jamais se fier au seul webhook entrant sans contre-vérification serveur.
  */
 export async function checkCinetPayTransaction(
   transaction_id: string
 ): Promise<CinetPayCheckResult> {
   const config = getCinetPayConfig();
-  console.log(`[CINETPAY_CHECK] Vérification statut transaction_id=${transaction_id}`);
 
   if (!config.apiKey || !config.siteId) {
     return {
       success: false,
       transaction_id,
       status: 'UNKNOWN',
-      message: 'Configuration CinetPay incomplète (CINETPAY_API_KEY ou CINETPAY_SITE_ID manquant)',
+      message: 'Configuration CinetPay incomplète (API Key ou Site ID manquant)',
     };
   }
 
@@ -327,7 +322,6 @@ export async function checkCinetPayTransaction(
     );
 
     const json = await res.json().catch(() => null);
-    console.log('[CINETPAY_RAW_CHECK]', JSON.stringify(json));
 
     if (json && (json.code === '00' || json.code === 0)) {
       const data = json.data || {};
@@ -340,12 +334,14 @@ export async function checkCinetPayTransaction(
         status = 'REFUSED';
       }
 
+      console.log(`[CINETPAY_CHECK] Résultat pour ${transaction_id} : ${status} (${data.amount} ${data.currency})`);
+
       return {
         success: true,
         transaction_id,
         status,
         amount: Number(data.amount) || undefined,
-        currency: data.currency || 'XOF',
+        currency: data.currency ? String(data.currency).toUpperCase() : 'XOF',
         payment_method: data.payment_method,
         operator_id: data.operator_id,
         payment_date: data.payment_date,
@@ -355,10 +351,10 @@ export async function checkCinetPayTransaction(
       };
     }
 
-    // Retourner le vrai message CinetPay
     const realMessage =
-      json?.message || json?.description || `CinetPay check code=${json?.code}`;
-    console.error(`[CINETPAY_CHECK] ❌ Échec : ${realMessage}`);
+      json?.message || json?.description || `Code réponse CinetPay: ${json?.code}`;
+
+    console.warn(`[CINETPAY_CHECK] Réponse non-00 pour ${transaction_id} : code=${json?.code} msg="${realMessage}"`);
 
     return {
       success: false,
@@ -370,16 +366,55 @@ export async function checkCinetPayTransaction(
     };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[CINETPAY_CHECK] ❌ Erreur réseau : ${errMsg}`);
+    console.error(`[CINETPAY_CHECK] Erreur réseau lors de la vérification : ${errMsg}`);
     return {
       success: false,
       transaction_id,
       status: 'UNKNOWN',
-      message: `Erreur réseau CinetPay : ${errMsg}`,
+      message: `Erreur de connexion CinetPay : ${errMsg}`,
     };
   }
 }
 
-// ─── Aliases rétrocompatibles pour code existant ────────────────────────────
+// ─── 5. Sécurité : Validation de Signature HMAC Webhook ─────────────────────
+
+/**
+ * Valide l'authenticité de la notification CinetPay via le jeton HMAC (x-token).
+ * Si CINETPAY_SECRET_KEY est configurée, calcule et compare le HMAC-SHA256.
+ */
+export function verifyCinetPaySignature(
+  xToken: string | null,
+  rawBody: string | Record<string, unknown>
+): boolean {
+  const config = getCinetPayConfig();
+
+  // Si aucune Secret Key n'est configurée, la double vérification serveur reste obligatoire
+  if (!config.secretKey) {
+    return true;
+  }
+
+  if (!xToken) {
+    return false;
+  }
+
+  try {
+    const content = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
+    const expected = crypto
+      .createHmac('sha256', config.secretKey)
+      .update(content)
+      .digest('hex');
+
+    // Comparaison à temps constant pour prévenir les attaques temporelles
+    return crypto.timingSafeEqual(
+      Buffer.from(xToken.toLowerCase(), 'utf-8'),
+      Buffer.from(expected.toLowerCase(), 'utf-8')
+    );
+  } catch {
+    // Si la comparaison échoue pour des longueurs différentes
+    return false;
+  }
+}
+
+// ─── Aliases rétrocompatibles ───────────────────────────────────────────────
 export const createPayment = initCinetPayPayment;
 export const checkPayment = checkCinetPayTransaction;

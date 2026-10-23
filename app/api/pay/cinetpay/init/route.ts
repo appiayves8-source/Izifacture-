@@ -3,6 +3,13 @@ import { createPayment } from '@/lib/cinetpay';
 
 export async function POST(req: NextRequest) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { success: false, error: 'Le banc d’essai sandbox est désactivé en environnement de production.' },
+        { status: 403 }
+      );
+    }
+
     let body: Record<string, unknown> = {};
     try {
       body = await req.json();

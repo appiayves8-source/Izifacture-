@@ -29,7 +29,6 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
     hasReachedLimit,
     error,
     initiatePayment,
-    activateSandboxDirect,
     isInitiating,
     refreshSubscription,
   } = useSubscription();
@@ -198,14 +197,9 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
 
         {/* Error message if any */}
         {error && (
-          <div className="mt-4 p-4 rounded-2xl bg-red-950/40 border border-red-800/40 text-xs text-red-200 space-y-2">
-            <div className="flex items-center gap-2 font-semibold">
-              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-              <span>{error}</span>
-            </div>
-            <p className="text-[11px] text-slate-300">
-              💡 Astuce : En environnement de développement, vous pouvez utiliser le bouton ci-dessous pour activer instantanément l&apos;accès Pro sans passer par une carte bancaire.
-            </p>
+          <div className="mt-4 p-4 rounded-2xl bg-red-950/40 border border-red-800/40 text-xs text-red-200 flex items-center gap-2 font-semibold">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
@@ -237,27 +231,6 @@ export default function SubscriptionGuard({ children }: SubscriptionGuardProps) 
           >
             <RefreshCw className="w-4 h-4" />
             <span>Actualiser</span>
-          </button>
-        </div>
-
-        {/* Sandbox Direct Test Option */}
-        <div className="mt-4 pt-4 border-t border-[#D4AF37]/15 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-left">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">
-              Mode Développeur / Sandbox
-            </span>
-            <p className="text-[11px] text-slate-400">
-              Débloquer la licence Pro immédiatement pour vos tests
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => activateSandboxDirect()}
-            disabled={isInitiating}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-[#F5E6B3] border border-[#D4AF37]/30 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Zap className="w-3.5 h-3.5 text-[#D4AF37]" />
-            Activer Pro (Mode Test Gratuit)
           </button>
         </div>
 
