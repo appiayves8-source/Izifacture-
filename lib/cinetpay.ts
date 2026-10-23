@@ -1,16 +1,17 @@
 /**
- * Module Centralisé CinetPay V2 — IziFacture Production-Ready
+ * Module Centralisé CinetPay V2 — IziFacture
  *
- * Conforme aux spécifications FinTech OHADA / UEMOA (Côte d'Ivoire).
- * Supporte : Wave, Orange Money, MTN MoMo, Moov Money et Cartes Bancaires (Visa / Mastercard).
+ * IS_TEST_MODE = true  → Mode sandbox CinetPay actif (paiements simulés)
+ * IS_TEST_MODE = false → Mode LIVE (paiements réels)
  *
- * Utilise STRICTEMENT ces 4 variables d'environnement :
- * - CINETPAY_API_KEY
- * - CINETPAY_SITE_ID
- * - CINETPAY_API_PASSWORD
- * - CINETPAY_SECRET_KEY
- * + NEXT_PUBLIC_APP_URL pour les callbacks
+ * Variables d'env utilisées (Vercel) :
+ *   CINETPAY_API_KEY, CINETPAY_SITE_ID,
+ *   CINETPAY_API_PASSWORD, CINETPAY_SECRET_KEY,
+ *   NEXT_PUBLIC_APP_URL
  */
+
+// ─── 🔴 INTERRUPTEUR TEST / LIVE — mettre false quand CinetPay valide le compte LIVE
+const IS_TEST_MODE = true;
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -66,28 +67,45 @@ export interface CinetPayCheckResult {
   raw?: unknown;
 }
 
-// ─── 1. Configuration & Détection Mode Test ──────────────────────────────────
+// ─── 1. Configuration & Mode TEST/LIVE ───────────────────────────────────────
 
 /**
- * Détecte si l'environnement est en mode test/sandbox
+ * Retourne true si IS_TEST_MODE est activé (interrupteur manuel en haut du fichier)
  */
 export function isTestMode(): boolean {
-  const apiKey = process.env.CINETPAY_API_KEY || '';
-  return apiKey.toLowerCase().includes('test');
+  return IS_TEST_MODE;
 }
 
 /**
- * Récupère la configuration CinetPay centralisée
+ * Récupère la configuration CinetPay centralisée.
+ * En mode TEST : utilise CINETPAY_TEST_API_KEY / CINETPAY_TEST_SITE_ID si définis,
+ * sinon retombe sur CINETPAY_API_KEY / CINETPAY_SITE_ID (avec metadata test injectée).
  */
 export function getCinetPayConfig(): CinetPayConfig {
-  const apiKey = process.env.CINETPAY_API_KEY || '';
-  const siteId = process.env.CINETPAY_SITE_ID || '';
+  // Log du mode actif — visible dans les logs Vercel à chaque appel
+  console.log('[MODE]', IS_TEST_MODE ? 'TEST 🧪' : 'LIVE 🟢');
+
+  // En mode TEST : préférer les clés TEST dédiées si présentes dans Vercel
+  const apiKey = IS_TEST_MODE
+    ? (process.env.CINETPAY_TEST_API_KEY || process.env.CINETPAY_API_KEY || '')
+    : (process.env.CINETPAY_API_KEY || '');
+
+  const siteId = IS_TEST_MODE
+    ? (process.env.CINETPAY_TEST_SITE_ID || process.env.CINETPAY_SITE_ID || '')
+    : (process.env.CINETPAY_SITE_ID || '');
+
   const apiPassword = process.env.CINETPAY_API_PASSWORD || '';
-  const secretKey = process.env.CINETPAY_SECRET_KEY || '';
+  const secretKey   = process.env.CINETPAY_SECRET_KEY   || '';
   const appUrl = (
     process.env.NEXT_PUBLIC_APP_URL ||
     'https://izifacture-fawn.vercel.app'
   ).replace(/\/$/, '');
+
+  console.log('[CINETPAY_CONFIG]', {
+    mode:    IS_TEST_MODE ? 'TEST' : 'LIVE',
+    site_id: siteId,
+    has_key: !!apiKey,
+  });
 
   return {
     apiKey,
@@ -95,7 +113,7 @@ export function getCinetPayConfig(): CinetPayConfig {
     apiPassword,
     secretKey,
     appUrl,
-    isTest: isTestMode(),
+    isTest: IS_TEST_MODE,
   };
 }
 
