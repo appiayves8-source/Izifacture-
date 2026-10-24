@@ -37,14 +37,27 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Récupération de la facture et de son client depuis Supabase (Admin pour garantir l'accès)
-    const { data: invoice, error: invoiceErr } = await supabaseAdmin
+    let { data: invoice, error: invoiceErr } = await supabaseAdmin
       .from('invoices')
       .select('*, client:clients(*)')
       .eq('id', invoiceId)
       .maybeSingle();
 
+    // Fallback par jeton de paiement sécurisé si l'identifiant fourni est un token
+    if (!invoice) {
+      const { data: tokenInvoice } = await supabaseAdmin
+        .from('invoices')
+        .select('*, client:clients(*)')
+        .eq('payment_token', invoiceId)
+        .maybeSingle();
+      if (tokenInvoice) {
+        invoice = tokenInvoice;
+        invoiceErr = null;
+      }
+    }
+
     if (invoiceErr || !invoice) {
-      console.error(`[CINETPAY_INIT] Facture introuvable id=${invoiceId}:`, invoiceErr);
+      console.error(`[CINETPAY_INIT] Facture introuvable id/token=${invoiceId}:`, invoiceErr);
       return NextResponse.json(
         { success: false, error: 'Facture introuvable en base de données.' },
         { status: 404 }

@@ -60,15 +60,15 @@ export default function CinetPayButton({
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.success || !data.payment_url) {
-        throw new Error(data.error || 'Paiement temporairement indisponible, réessayez');
+        throw new Error('Paiement indisponible');
       }
 
       console.log(`[CinetPayButton] Redirection vers CinetPay Checkout: ${data.payment_url}`);
       window.location.href = data.payment_url;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur de connexion CinetPay';
-      console.error('[CinetPayButton] Erreur initiation:', msg);
-      setError(msg);
+      console.error('[CinetPayButton] Erreur initiation interne:', err);
+      // Règle de sécurité : Message client non technique, aucun secret ni IP exposé
+      setError('Le paiement est momentanément indisponible, réessayez dans quelques minutes.');
       setLoading(false);
     }
   };
@@ -90,21 +90,31 @@ export default function CinetPayButton({
         {loading ? (
           <>
             <RefreshCw className="w-4 h-4 animate-spin text-white" />
-            <span>Redirection vers CinetPay...</span>
+            <span>Connexion à la passerelle de paiement...</span>
           </>
         ) : (
           <>
             <ShieldCheck className="w-4 h-4 text-emerald-200" />
-            <span>Payer {formatFCFA(invoice.amount)} via CinetPay</span>
+            <span>Payer {formatFCFA(invoice.amount)}</span>
             <ArrowRight className="w-4 h-4 text-emerald-200" />
           </>
         )}
       </button>
 
       {error && (
-        <div className="w-full p-2.5 rounded-xl bg-red-950/50 border border-red-800/40 text-red-300 text-xs flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-          <span>{error}</span>
+        <div className="w-full p-3 rounded-2xl bg-[#1D1418] border border-red-500/40 text-red-200 text-xs flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handlePay}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-white font-bold text-[11px] border border-red-500/30 transition-colors shrink-0"
+          >
+            Réessayer
+          </button>
         </div>
       )}
     </div>

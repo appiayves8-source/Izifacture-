@@ -46,6 +46,12 @@ export interface Invoice {
   paymentStatus?: string;
   cinetpayTransactionId?: string;
   paidAt?: string;
+  paymentToken?: string;
+  sentAt?: string;
+  sendStatus?: 'draft' | 'pending' | 'sent' | 'failed';
+  sendError?: string;
+  sendChannel?: string;
+  sendRecipient?: string;
 }
 
 // ─── Données initiales ────────────────────────────────────────────────────────
@@ -136,6 +142,12 @@ interface DbRow {
   payment_status?: string;
   cinetpay_transaction_id?: string;
   paid_at?: string;
+  payment_token?: string;
+  sent_at?: string;
+  send_status?: string;
+  send_error?: string;
+  send_channel?: string;
+  send_recipient?: string;
   items?: Array<{ id: string; description?: string; quantity?: number; unit_price?: number; total?: number }>;
 }
 
@@ -178,6 +190,12 @@ function mapDbToInvoice(row: DbRow, clientsList: Client[]): Invoice {
     paymentStatus: (row.payment_status as string) || undefined,
     cinetpayTransactionId: (row.cinetpay_transaction_id as string) || undefined,
     paidAt: (row.paid_at as string) || undefined,
+    paymentToken: (row.payment_token as string) || undefined,
+    sentAt: (row.sent_at as string) || undefined,
+    sendStatus: (row.send_status as 'draft' | 'pending' | 'sent' | 'failed') || undefined,
+    sendError: (row.send_error as string) || undefined,
+    sendChannel: (row.send_channel as string) || undefined,
+    sendRecipient: (row.send_recipient as string) || undefined,
     notes: row.notes || undefined,
     items,
   };

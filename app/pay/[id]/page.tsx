@@ -1,6 +1,6 @@
 import React from 'react';
 import { Metadata } from 'next';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import CinetPayButton from '@/components/payments/CinetPayButton';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import {
@@ -16,6 +16,7 @@ import {
   Phone,
   Mail,
   MapPin,
+  AlertCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -27,23 +28,33 @@ interface PayPageProps {
 
 export async function generateMetadata({ params }: PayPageProps): Promise<Metadata> {
   return {
-    title: `Paiement en ligne sécurisé — Facture ${params.id} | IziFacture`,
+    title: `Paiement en ligne sécurisé — Facture | IziFacture`,
     description: 'Réglez votre facture en toute sécurité par Wave, Orange Money, MTN MoMo, Moov ou Carte Bancaire.',
   };
 }
 
 export default async function PublicInvoicePaymentPage({ params }: PayPageProps) {
-  const { id } = params;
+  const tokenOrId = params.id;
 
-  // 1. Récupération publique de la facture
-  const { data: invoice } = await supabase
+  // 1. Récupération sécurisée par jeton unique de paiement non devinable (128+ bits)
+  let { data: invoice } = await supabaseAdmin
     .from('invoices')
     .select('*, client:clients(*), items:invoice_items(*)')
-    .eq('id', id)
+    .eq('payment_token', tokenOrId)
     .maybeSingle();
 
+  // Fallback rétrocompatible si l'URL est accédée via l'identifiant interne de facture
+  if (!invoice) {
+    const { data: fallbackInvoice } = await supabaseAdmin
+      .from('invoices')
+      .select('*, client:clients(*), items:invoice_items(*)')
+      .eq('id', tokenOrId)
+      .maybeSingle();
+    invoice = fallbackInvoice;
+  }
+
   // 2. Récupération des paramètres d'entreprise
-  const { data: settings } = await supabase
+  const { data: settings } = await supabaseAdmin
     .from('company_settings')
     .select('*')
     .limit(1)
@@ -75,6 +86,10 @@ export default async function PublicInvoicePaymentPage({ params }: PayPageProps)
     invoice.payment_status === 'paid' ||
     invoice.status === 'payee' ||
     invoice.status === 'paid';
+
+  const isCancelled =
+    invoice.status === 'annulee' ||
+    invoice.status === 'cancelled';
 
   const companyName = settings?.company_name || 'IziFacture SARL';
   const companyPhone = settings?.phone || '+225 05 02 62 98 21';
@@ -126,6 +141,23 @@ export default async function PublicInvoicePaymentPage({ params }: PayPageProps)
             </div>
             <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">
               Payée
+            </span>
+          </div>
+        ) : isCancelled ? (
+          <div className="p-4 rounded-2xl bg-red-950/40 border border-red-500/40 flex items-center justify-between gap-3 text-red-200">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white">Facture Annulée</p>
+                <p className="text-[11px] text-red-300">
+                  Cette facture a été annulée par son émetteur. Aucun règlement n&apos;est attendu.
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 font-mono text-xs font-bold">
+              Annulée
             </span>
           </div>
         ) : (
@@ -247,7 +279,7 @@ export default async function PublicInvoicePaymentPage({ params }: PayPageProps)
           </div>
 
           {/* CinetPay Payment Channels */}
-          {!isPaid && (
+          {!isPaid && !isCancelled && (
             <div className="space-y-4 pt-2">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center mb-3">
