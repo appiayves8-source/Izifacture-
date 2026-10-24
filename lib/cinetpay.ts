@@ -287,11 +287,25 @@ export async function initCinetPayPayment(
     // 1. Obtenir le token OAuth Bearer
     const authResult = await getCinetPayToken();
     if (!authResult.success || !authResult.token) {
-      console.error(`[CINETPAY_AUTH] Échec : ${authResult.error}`);
+      const errMsg = authResult.error || '';
+      console.error(`[CINETPAY_AUTH] Échec : ${errMsg}`);
+
+      // ── Diagnostic temporaire : log IP sortante si l'erreur est liée au whitelist IP ──
+      if (/withlisted|whitelist|ip.*(not|block)|not.*allow/i.test(errMsg)) {
+        try {
+          const ipRes = await fetch('https://api.ipify.org?format=json', { cache: 'no-store' });
+          const ipData = await ipRes.json().catch(() => ({}));
+          console.log(`[CINETPAY_AUTH] IP sortante au moment de l'échec : ${ipData?.ip ?? 'inconnue'}`);
+        } catch {
+          console.log('[CINETPAY_AUTH] Impossible de récupérer l\'IP sortante via ipify.');
+        }
+      }
+      // ── Fin diagnostic temporaire ──
+
       return {
         success: false,
         transaction_id: params.transaction_id,
-        message: `Authentification CinetPay échouée (${authResult.error}). Veuillez vérifier votre mot de passe d'API CINETPAY_SECRET_KEY.`,
+        message: `Authentification CinetPay échouée (${errMsg}). Veuillez vérifier votre mot de passe d'API CINETPAY_SECRET_KEY.`,
       };
     }
 
