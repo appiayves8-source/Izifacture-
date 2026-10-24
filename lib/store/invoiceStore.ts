@@ -133,6 +133,9 @@ interface DbRow {
   amount?: number;
   payment_method?: string;
   notes?: string;
+  payment_status?: string;
+  cinetpay_transaction_id?: string;
+  paid_at?: string;
   items?: Array<{ id: string; description?: string; quantity?: number; unit_price?: number; total?: number }>;
 }
 

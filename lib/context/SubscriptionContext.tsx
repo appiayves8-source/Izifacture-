@@ -186,18 +186,24 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         return active;
       }
 
-      // Fallback API Route
+      // Fallback API Route avec timeout de sécurité
       const currentSession = session || (await supabase.auth.getSession()).data.session;
       const token = currentSession?.access_token;
 
       if (token) {
-        const res = await fetch('/api/subscription/check', {
+        // Timeout de 5s pour ne pas bloquer l'interface
+        const timeoutPromise = new Promise<Response | null>(resolve =>
+          setTimeout(() => resolve(null), 5000)
+        );
+        const fetchPromise = fetch('/api/subscription/check', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
         }).catch(() => null);
+
+        const res = await Promise.race([fetchPromise, timeoutPromise]);
 
         if (res && res.ok) {
           const data = await res.json();

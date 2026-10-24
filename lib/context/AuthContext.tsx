@@ -31,7 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   resendConfirmation: async () => ({ error: null }),
   resetPassword: async () => ({ error: null }),
   updatePassword: async () => ({ error: null }),
-  signOut: async () => {},
+  signOut: async () => { },
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -40,10 +40,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Timeout de sécurité : si Supabase ne répond pas en 5s, on débloque l'UI
+    const authTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     // 1. Récupérer la session active
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(authTimeout);
       setSession(session);
       setUser(session?.user ?? null);
+      setLoading(false);
+    }).catch(() => {
+      clearTimeout(authTimeout);
       setLoading(false);
     });
 
@@ -51,12 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      clearTimeout(authTimeout);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
     return () => {
+      clearTimeout(authTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -229,12 +240,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       try {
         localStorage.removeItem('izifacture_sub_cache_v1');
-      } catch {}
+      } catch { }
     }
 
     // 3. Déconnexion locale immédiate et révocation distante en tâche de fond (non bloquante)
     try {
-      supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      supabase.auth.signOut({ scope: 'local' }).catch(() => { });
     } catch (err) {
       console.warn('Erreur déconnexion:', err);
     }
