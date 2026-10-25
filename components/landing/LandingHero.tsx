@@ -40,7 +40,7 @@ export default function LandingHero() {
         <div className="flex flex-col sm:flex-row items-center gap-space-md mb-16">
           <Link
             className="w-full sm:w-auto inline-flex items-center justify-center gap-space-sm px-8 py-4 rounded-full bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_16px_36px_rgba(37,99,235,0.32)] hover:bg-primary transition-all duration-300 hover:scale-[1.02]"
-            href="/login"
+            href="/login?mode=signup"
           >
             <span>Commencer gratuitement</span>
             <span className="material-symbols-outlined text-base">arrow_forward</span>
@@ -174,7 +174,7 @@ export default function LandingHero() {
                   </div>
                 </div>
                 <Link
-                  href="/login"
+                  href="/login?mode=signup"
                   className="w-full py-3 rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-semibold hover:bg-primary transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   <span className="material-symbols-outlined text-sm">bolt</span>

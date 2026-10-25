@@ -47,6 +47,13 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Rediriger vers le dashboard si l'utilisateur est déjà connecté
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router]);
+
   // Écouter l'événement de récupération de mot de passe Supabase
   useEffect(() => {
     const {
@@ -69,6 +76,12 @@ export default function LoginPage() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+    // Détection mode demandé (ex: /login?mode=signup)
+    const modeParam = urlParams.get('mode');
+    if (modeParam === 'signup') {
+      setMode('signup');
+    }
 
     // Détection réinitialisation mot de passe
     if (urlParams.get('type') === 'recovery' || hashParams.get('type') === 'recovery') {
@@ -98,7 +111,7 @@ export default function LoginPage() {
         verifyOtp(paramEmail, code).then((res) => {
           if (!res.error) {
             setSuccessMessage('Compte validé avec succès ! Redirection en cours...');
-            setTimeout(() => router.push('/'), 1200);
+            setTimeout(() => router.push('/dashboard'), 1200);
           } else {
             setErrorMessage(res.error);
           }
@@ -107,7 +120,7 @@ export default function LoginPage() {
     } else if (isConfirmed || hashParams.get('access_token')) {
       if (hashParams.get('type') !== 'recovery') {
         setSuccessMessage('Votre compte a été confirmé avec succès par le lien email ! Redirection...');
-        setTimeout(() => router.push('/'), 1200);
+        setTimeout(() => router.push('/dashboard'), 1200);
       }
     }
   }, [router, verifyOtp]);
@@ -129,7 +142,7 @@ export default function LoginPage() {
             clearInterval(pollInterval);
             setSuccessMessage('🎉 Confirmation détectée depuis votre autre appareil ! Accès autorisé...');
             setTimeout(() => {
-              router.push('/');
+              router.push('/dashboard');
             }, 1000);
           }
         }
@@ -161,7 +174,7 @@ export default function LoginPage() {
         }
         setSubmitting(false);
       } else {
-        router.push('/');
+        router.push('/dashboard');
       }
     } else if (mode === 'signup') {
       const res = await signUp(email, password, fullName);
@@ -179,7 +192,7 @@ export default function LoginPage() {
       } else {
         setSuccessMessage('Compte créé avec succès ! Redirection en cours...');
         setTimeout(() => {
-          router.push('/');
+          router.push('/dashboard');
         }, 1500);
       }
     } else if (mode === 'confirm_otp') {
@@ -195,7 +208,7 @@ export default function LoginPage() {
       } else {
         setSuccessMessage('Compte confirmé avec succès ! Accès en cours...');
         setTimeout(() => {
-          router.push('/');
+          router.push('/dashboard');
         }, 1200);
       }
     } else if (mode === 'forgot_password') {
@@ -231,7 +244,7 @@ export default function LoginPage() {
       } else {
         setSuccessMessage('Mot de passe mis à jour avec succès ! Redirection vers votre tableau de bord...');
         setTimeout(() => {
-          router.push('/');
+          router.push('/dashboard');
         }, 1200);
       }
     }

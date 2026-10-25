@@ -28,7 +28,7 @@ export default function LandingCta() {
         <div className="flex flex-col sm:flex-row items-center gap-4 z-10">
           <Link
             className="px-8 py-4 rounded-full bg-primary-container text-on-primary font-label-lg text-label-lg font-bold shadow-[0_16px_36px_rgba(37,99,235,0.4)] hover:bg-primary transition-all duration-300 hover:scale-105"
-            href="/login"
+            href="/login?mode=signup"
           >
             Commencer gratuitement
           </Link>

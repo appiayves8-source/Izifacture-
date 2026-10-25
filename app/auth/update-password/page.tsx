@@ -40,7 +40,7 @@ function UpdatePasswordContent() {
     } else {
       setSuccessMessage('Votre mot de passe a été réinitialisé avec succès ! Redirection vers votre tableau de bord...');
       setTimeout(() => {
-        router.push('/');
+        router.push('/dashboard');
       }, 1500);
     }
   };

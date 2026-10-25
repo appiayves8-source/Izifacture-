@@ -49,7 +49,7 @@ export default function LandingNav() {
         <div className="flex items-center gap-space-sm">
           <Link
             className="hidden sm:inline-flex items-center justify-center px-space-lg py-space-sm rounded-full bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_10px_24px_rgba(37,99,235,0.28)] hover:bg-primary transition-all duration-200"
-            href="/login"
+            href="/login?mode=signup"
           >
             Commencer gratuitement
           </Link>
@@ -108,7 +108,7 @@ export default function LandingNav() {
           </a>
           <div className="pt-3 border-t border-surface-container flex flex-col gap-2">
             <Link
-              href="/login"
+              href="/login?mode=signup"
               onClick={() => setMobileMenuOpen(false)}
               className="w-full py-3 rounded-full bg-primary-container text-on-primary font-label-lg text-label-lg font-semibold text-center shadow-md hover:bg-primary transition-colors"
             >

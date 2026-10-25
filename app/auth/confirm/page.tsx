@@ -136,7 +136,7 @@ export default function AuthConfirmPage() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          router.push('/');
+          router.push('/dashboard');
           return 0;
         }
         return prev - 1;
@@ -239,7 +239,7 @@ export default function AuthConfirmPage() {
                 </div>
 
                 <button
-                  onClick={() => router.push('/')}
+                  onClick={() => router.push('/dashboard')}
                   className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#DFBA55] via-[#D4AF37] to-[#B8860B] hover:from-[#E8C86A] hover:to-[#C69214] text-black font-extrabold text-sm shadow-[0_2px_15px_rgba(212,175,55,0.3)] hover:shadow-[0_4px_22px_rgba(212,175,55,0.5)] active:scale-95 transition-all"
                 >
                   Accéder à l&apos;application maintenant →

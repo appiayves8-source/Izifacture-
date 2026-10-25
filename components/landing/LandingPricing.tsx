@@ -48,7 +48,7 @@ export default function LandingPricing() {
           </div>
           <Link
             className="mt-8 w-full py-3.5 rounded-full bg-surface-container-lowest text-on-surface font-label-md text-label-md font-bold text-center hover:bg-surface-container transition-colors shadow-xs"
-            href="/login"
+            href="/login?mode=signup"
           >
             Commencer gratuitement
           </Link>
@@ -90,7 +90,7 @@ export default function LandingPricing() {
           </div>
           <Link
             className="mt-8 w-full py-4 rounded-full bg-primary-container text-on-primary font-label-lg text-label-lg font-bold text-center shadow-[0_12px_28px_rgba(37,99,235,0.3)] hover:bg-primary transition-all duration-200"
-            href="/login"
+            href="/login?mode=signup"
           >
             Activer l&apos;offre Pro
           </Link>
@@ -126,7 +126,7 @@ export default function LandingPricing() {
           </div>
           <Link
             className="mt-8 w-full py-3.5 rounded-full bg-surface-container-lowest text-on-surface font-label-md text-label-md font-bold text-center hover:bg-surface-container transition-colors shadow-xs"
-            href="/login"
+            href="/login?mode=signup"
           >
             Contacter notre équipe
           </Link>

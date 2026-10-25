@@ -34,7 +34,7 @@ export const navigationGroups = [
     items: [
       {
         name: "Vue d'ensemble",
-        href: '/',
+        href: '/dashboard',
         icon: LayoutGrid,
       },
       {
@@ -99,8 +99,8 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const handleConfirmLogout = () => {
     setLogoutModalOpen(false);
     if (onClose) onClose();
-    // 1. Redirection immédiate sans attendre l'appel réseau
-    router.push('/login');
+    // 1. Redirection immédiate vers la page d'accueil / landing page
+    router.push('/');
     // 2. Déconnexion asynchrone non-bloquante
     signOut();
   };
@@ -127,7 +127,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </h3>
           <div className="space-y-1">
             {group.items.map((item) => {
-              const isActive = pathname === item.href || (item.href === '/' && pathname === '/');
+              const isActive = pathname === item.href || (item.href === '/dashboard' && pathname === '/dashboard');
               const Icon = item.icon;
 
               return (
@@ -251,7 +251,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         <div className="space-y-6">
           {/* Brand / Logo */}
           <div className="px-2 pt-1 pb-2">
-            <Link href="/" className="flex items-center gap-3 group">
+            <Link href="/dashboard" className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#DFBA55] via-[#D4AF37] to-[#8C6709] flex items-center justify-center shadow-[0_2px_12px_rgba(212,175,55,0.3)] group-hover:scale-105 transition-transform duration-200">
                 <div className="grid grid-cols-2 gap-1 p-1">
                   <span className="w-2 h-2 rounded-full bg-black"></span>
@@ -300,7 +300,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           <div className="fixed inset-y-0 left-0 w-[84vw] max-w-[340px] h-[100dvh] bg-[#0D0E15] shadow-2xl z-50 flex flex-col justify-between overflow-hidden animate-slide-in-left border-r border-[#D4AF37]/30">
             {/* Mobile Header: Logo + Spacious Close Button */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#D4AF37]/15 flex-shrink-0 bg-[#0D0E15]">
-              <Link href="/" onClick={onClose} className="flex items-center gap-3">
+              <Link href="/dashboard" onClick={onClose} className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#DFBA55] via-[#D4AF37] to-[#8C6709] flex items-center justify-center shadow-md">
                   <div className="grid grid-cols-2 gap-1 p-1">
                     <span className="w-2 h-2 rounded-full bg-black"></span>

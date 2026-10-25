@@ -525,7 +525,7 @@ export default function QuotesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Link href="/" className="inline-flex items-center gap-1 text-xs text-[#D4AF37] hover:text-amber-200 transition-colors font-medium">
+            <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs text-[#D4AF37] hover:text-amber-200 transition-colors font-medium">
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Tableau de bord</span>
             </Link>

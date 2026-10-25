@@ -1,13 +1,5 @@
 import type { Metadata } from 'next';
-import LandingNav from '@/components/landing/LandingNav';
-import LandingHero from '@/components/landing/LandingHero';
-import LandingProblem from '@/components/landing/LandingProblem';
-import LandingFeatures from '@/components/landing/LandingFeatures';
-import LandingHowItWorks from '@/components/landing/LandingHowItWorks';
-import LandingTestimonials from '@/components/landing/LandingTestimonials';
-import LandingPricing from '@/components/landing/LandingPricing';
-import LandingCta from '@/components/landing/LandingCta';
-import LandingFooter from '@/components/landing/LandingFooter';
+import LandingView from '@/components/landing/LandingView';
 
 export const metadata: Metadata = {
   title: 'iziFacture — Facturation & Conformité Fiscale OHADA en FCFA',
@@ -45,19 +37,5 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return (
-    <div className="bg-background text-on-surface font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary">
-      <LandingNav />
-      <main className="w-full flex-1 pt-24">
-        <LandingHero />
-        <LandingProblem />
-        <LandingFeatures />
-        <LandingHowItWorks />
-        <LandingTestimonials />
-        <LandingPricing />
-        <LandingCta />
-      </main>
-      <LandingFooter />
-    </div>
-  );
+  return <LandingView />;
 }

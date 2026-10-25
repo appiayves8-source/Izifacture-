@@ -132,7 +132,7 @@ export default function ClientsPage() {
         <div>
           <div className="flex items-center gap-2 mb-1.5">
             <Link
-              href="/"
+              href="/dashboard"
               className="inline-flex items-center gap-1 text-xs text-[#D4AF37] hover:text-amber-200 transition-colors font-medium"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
