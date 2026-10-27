@@ -35,7 +35,11 @@ export default function InvoicesListPage() {
   const handleCopyPaymentLink = (invoiceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (typeof window === 'undefined') return;
-    const url = `${window.location.origin}/pay/${invoiceId}`;
+    const origin = window.location.origin;
+    const base = origin.includes('localhost') || origin.includes('127.0.0.1')
+      ? (process.env.NEXT_PUBLIC_APP_URL || 'https://izifacture-fawn.vercel.app')
+      : origin;
+    const url = `${base.replace(/\/$/, '')}/pay/${invoiceId}`;
     navigator.clipboard.writeText(url);
     setCopiedId(invoiceId);
     setTimeout(() => setCopiedId(null), 2500);

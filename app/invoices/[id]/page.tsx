@@ -58,7 +58,11 @@ export default function InvoiceDetailPage() {
   const handleCopyPaymentLink = () => {
     if (typeof window === 'undefined') return;
     const token = invoice?.paymentToken || invoiceId;
-    const url = `${window.location.origin}/pay/${token}`;
+    const origin = window.location.origin;
+    const base = origin.includes('localhost') || origin.includes('127.0.0.1')
+      ? (process.env.NEXT_PUBLIC_APP_URL || 'https://izifacture-fawn.vercel.app')
+      : origin;
+    const url = `${base.replace(/\/$/, '')}/pay/${token}`;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     showToast('Lien de paiement copié dans le presse-papier !');

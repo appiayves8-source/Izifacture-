@@ -70,23 +70,33 @@ export function formatInternationalPhone(phone: string, country: string = "Côte
 export function buildInvoiceWhatsAppMessage(data: InvoiceWhatsAppPayload): string {
   const formattedAmount = new Intl.NumberFormat('fr-FR').format(data.amount);
 
+  // Garantir une URL HTTPS publique valide (WhatsApp mobile ne rend jamais cliquable 'localhost')
+  let cleanPaymentUrl = data.paymentUrl || '';
+  if (!cleanPaymentUrl || cleanPaymentUrl.includes('localhost') || cleanPaymentUrl.includes('127.0.0.1')) {
+    const token = cleanPaymentUrl.includes('/pay/') ? cleanPaymentUrl.split('/pay/')[1] : data.invoiceNumber;
+    cleanPaymentUrl = `https://izifacture-fawn.vercel.app/pay/${token}`;
+  }
+
   return [
-    `Facture ${data.invoiceNumber} de ${data.companyName} – ${formattedAmount} FCFA`,
+    `Facture *${data.invoiceNumber}* de *${data.companyName}* – *${formattedAmount} FCFA*`,
     ``,
     `Bonjour ${data.clientName},`,
     ``,
-    `Votre facture n° *${data.invoiceNumber}* d'un montant de *${formattedAmount} FCFA* a été émise.`,
+    `Votre facture n° *${data.invoiceNumber}* d'un montant de *${formattedAmount} FCFA* est disponible.`,
     `📅 Date d'échéance : *${data.dueDate}*`,
     ``,
-    `💳 *Payer en ligne en 1 clic :*`,
-    `${data.paymentUrl}`,
+    `💳 *Cliquer sur le lien ci-dessous pour payer directement en ligne :*`,
     ``,
-    `Moyens de paiement acceptés : Wave, Orange Money, MTN MoMo, Moov Money et Carte Bancaire.`,
-    data.pdfUrl ? `\n📄 Télécharger votre facture au format PDF :\n${data.pdfUrl}` : '',
+    cleanPaymentUrl,
+    ``,
+    `✅ _Moyens de paiement acceptés : Wave, Orange Money, MTN MoMo, Moov Money et Carte Bancaire._`,
+    data.pdfUrl ? `\n📄 Télécharger votre facture au format PDF :\n${data.pdfUrl}\n` : '',
+    ``,
+    `💡 _Astuce : Si le lien ci-dessus n'apparaît pas en bleu cliquable, répondez simplement "OK" à ce message ou ajoutez notre contact pour l'activer instantanément._`,
     ``,
     `Merci de votre confiance.`,
-    `— *${data.companyName}*`
-  ].filter(Boolean).join('\n');
+    `— *${data.companyName}*`,
+  ].filter((line) => line !== undefined && line !== null).join('\n');
 }
 
 /**

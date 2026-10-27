@@ -47,7 +47,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // 2. Contrôle d'Idempotence strict : Si la même clé d'idempotence a déjà été traitée avec succès
     if (idempotencyKey && invoice.idempotency_key === idempotencyKey && invoice.send_status === 'sent') {
       console.log(`[ISSUE_AND_SEND] Idempotence respectée : facture ${invoiceId} déjà émise et envoyée avec cette clé.`);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://izifacture-fawn.vercel.app';
+      const appUrl = (rawAppUrl.includes('localhost') ? 'https://izifacture-fawn.vercel.app' : rawAppUrl).replace(/\/$/, '');
       return NextResponse.json({
         success: true,
         idempotentReplay: true,
@@ -114,7 +115,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       paymentToken = crypto.randomBytes(24).toString('hex');
     }
 
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://izifacture-fawn.vercel.app';
+    // WhatsApp mobile refuse de rendre cliquable 'localhost'. On garantit une URL HTTPS publique.
+    const appUrl = (rawAppUrl.includes('localhost') ? 'https://izifacture-fawn.vercel.app' : rawAppUrl).replace(/\/$/, '');
     const paymentUrl = `${appUrl}/pay/${paymentToken}`;
 
     // Récupération des paramètres entreprise
