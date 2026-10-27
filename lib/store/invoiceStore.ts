@@ -398,16 +398,43 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
         throw new Error(invErr.message);
       }
 
-      // ③ Insertion des articles
+      // ③ Insertion des articles avec identifiant unique garanti (évite collision de clé primaire)
+      let savedItems: InvoiceItem[] = [];
       if (invoiceData.items && invoiceData.items.length > 0) {
-        const itemsToInsert = invoiceData.items.map((item, idx) => ({
-          id: item.id || `item-${Date.now()}-${idx}`, invoice_id: id,
-          description: item.description, quantity: item.quantity,
-          unit_price: item.unitPrice, total: item.total, sort_order: idx + 1,
+        const itemsToInsert = invoiceData.items.map((item, idx) => {
+          const uniqueId = `item-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+          return {
+            id: uniqueId,
+            invoice_id: id,
+            description: item.description?.trim() || 'Prestation de service',
+            quantity: Number(item.quantity) || 1,
+            unit_price: Number(item.unitPrice) || 0,
+            total: Number(item.total) || 0,
+            sort_order: idx + 1,
+          };
+        });
+
+        let { error: itemsErr } = await supabase.from('invoice_items').insert(itemsToInsert);
+        if (itemsErr) {
+          console.warn('Erreur Supabase insert invoice_items, tentative sans ID explicite:', itemsErr.message);
+          const fallbackItems = itemsToInsert.map(({ id: _discard, ...rest }) => rest);
+          const { error: retryErr } = await supabase.from('invoice_items').insert(fallbackItems);
+          if (retryErr) {
+            console.error('Erreur finale insert invoice_items:', retryErr.message);
+            throw new Error(`Erreur lors de l'enregistrement des articles : ${retryErr.message}`);
+          }
+        }
+
+        savedItems = itemsToInsert.map((it) => ({
+          id: it.id,
+          description: it.description,
+          quantity: it.quantity,
+          unitPrice: it.unit_price,
+          total: it.total,
         }));
-        const { error: itemsErr } = await supabase.from('invoice_items').insert(itemsToInsert);
-        if (itemsErr) console.error('Erreur Supabase insert invoice_items:', itemsErr.message);
       }
+
+      newInvoice.items = savedItems.length > 0 ? savedItems : (invoiceData.items || []);
     } catch (err) {
       console.error('Erreur addInvoice Supabase:', err);
       throw err; // Remonter l'erreur au formulaire pour afficher un message
@@ -446,9 +473,13 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
           await supabase.from('invoice_items').delete().eq('invoice_id', id);
           if (updates.items.length > 0) {
             const itemsToInsert = updates.items.map((item, idx) => ({
-              id: item.id || `item-${Date.now()}-${idx}`, invoice_id: id,
-              description: item.description, quantity: item.quantity,
-              unit_price: item.unitPrice, total: item.total, sort_order: idx + 1,
+              id: `item-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+              invoice_id: id,
+              description: item.description?.trim() || 'Prestation de service',
+              quantity: Number(item.quantity) || 1,
+              unit_price: Number(item.unitPrice) || 0,
+              total: Number(item.total) || 0,
+              sort_order: idx + 1,
             }));
             await supabase.from('invoice_items').insert(itemsToInsert);
           }

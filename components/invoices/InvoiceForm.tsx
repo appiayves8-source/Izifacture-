@@ -74,7 +74,7 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
   const [items, setItems] = useState<InvoiceItem[]>(
     initialInvoice?.items || [
       {
-        id: 'item-1',
+        id: `item-${Date.now()}-0`,
         description: '',
         quantity: 0,
         unitPrice: 0,
