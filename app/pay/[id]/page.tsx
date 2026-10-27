@@ -1,7 +1,7 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import CinetPayButton from '@/components/payments/CinetPayButton';
+import PublicPaymentCheckout from '@/components/payments/PublicPaymentCheckout';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import {
   ShieldCheck,
@@ -36,24 +36,45 @@ export async function generateMetadata({ params }: PayPageProps): Promise<Metada
 export default async function PublicInvoicePaymentPage({ params }: PayPageProps) {
   const tokenOrId = params.id;
 
-  // 1. Récupération sécurisée par jeton unique de paiement non devinable (128+ bits)
+  // 1. Récupération par identifiant unique de facture (id, ex: inv-1793089596802)
   let { data: invoice } = await supabaseAdmin
     .from('invoices')
     .select('*, client:clients(*), items:invoice_items(*)')
-    .eq('payment_token', tokenOrId)
+    .eq('id', tokenOrId)
     .maybeSingle();
 
-  // Fallback rétrocompatible si l'URL est accédée via l'identifiant interne de facture
+  // 2. Fallback par numéro officiel de facture (ex: FAC-2026-0002)
   if (!invoice) {
-    const { data: fallbackInvoice } = await supabaseAdmin
+    const { data: numInvoice } = await supabaseAdmin
       .from('invoices')
       .select('*, client:clients(*), items:invoice_items(*)')
-      .eq('id', tokenOrId)
+      .eq('invoice_number', tokenOrId)
       .maybeSingle();
-    invoice = fallbackInvoice;
+    invoice = numInvoice;
   }
 
-  // 2. Récupération des paramètres d'entreprise
+  // 3. Fallback par token CinetPay
+  if (!invoice) {
+    const { data: tokenInvoice } = await supabaseAdmin
+      .from('invoices')
+      .select('*, client:clients(*), items:invoice_items(*)')
+      .eq('cinetpay_token', tokenOrId)
+      .maybeSingle();
+    invoice = tokenInvoice;
+  }
+
+  // Fallback intelligent pour les articles : si aucun article n'est associé, on génère la ligne de prestation
+  if (invoice && (!invoice.items || invoice.items.length === 0) && (invoice.amount || invoice.subtotal)) {
+    invoice.items = [{
+      id: `item-fallback-${invoice.id}`,
+      description: invoice.service_type || 'Prestation de services B2B',
+      quantity: 1,
+      unit_price: Number(invoice.subtotal || invoice.amount),
+      total: Number(invoice.subtotal || invoice.amount),
+    }];
+  }
+
+  // Récupération des paramètres d'entreprise
   const { data: settings } = await supabaseAdmin
     .from('company_settings')
     .select('*')
@@ -278,48 +299,10 @@ export default async function PublicInvoicePaymentPage({ params }: PayPageProps)
             </div>
           </div>
 
-          {/* CinetPay Payment Channels */}
+          {/* Guichet de Paiement Interactif Sécurisé */}
           {!isPaid && !isCancelled && (
-            <div className="space-y-4 pt-2">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center mb-3">
-                  Moyens de paiement acceptés en direct :
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-                  <div className="px-3 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/25 flex flex-col items-center justify-center">
-                    <span className="font-extrabold text-[#1DC3F4] text-xs">Wave</span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">Côte d&apos;Ivoire</span>
-                  </div>
-                  <div className="px-3 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/25 flex flex-col items-center justify-center">
-                    <span className="font-extrabold text-[#FF6600] text-xs">Orange Money</span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">OM CI</span>
-                  </div>
-                  <div className="px-3 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/25 flex flex-col items-center justify-center">
-                    <span className="font-extrabold text-[#FFCC00] text-xs">MTN MoMo</span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">Mobile Money</span>
-                  </div>
-                  <div className="px-3 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/25 flex flex-col items-center justify-center">
-                    <span className="font-extrabold text-[#006699] text-xs">Moov Money</span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">Flooz</span>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1 px-3 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/25 flex flex-col items-center justify-center">
-                    <span className="font-extrabold text-[#F5E6B3] text-xs flex items-center gap-1">
-                      <CreditCard className="w-3.5 h-3.5 text-[#D4AF37]" /> Carte
-                    </span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">Visa / Master</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <div className="pt-2">
-                <CinetPayButton invoice={invoice} size="lg" />
-              </div>
-
-              <div className="flex items-center justify-center gap-2 text-[11px] text-slate-500 pt-1">
-                <Lock className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>Paiement sécurisé et vérifié automatiquement par CinetPay V2</span>
-              </div>
+            <div className="pt-2">
+              <PublicPaymentCheckout invoice={invoice} companyName={companyName} />
             </div>
           )}
         </div>

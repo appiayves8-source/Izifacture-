@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         idempotentReplay: true,
         invoice,
         sendStatus: invoice.send_status,
-        paymentUrl: `${appUrl}/pay/${invoice.payment_token}`,
+        paymentUrl: `${appUrl}/pay/${invoice.id}`,
         message: 'Facture déjà émise et envoyée.',
       });
     }
@@ -108,17 +108,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       );
     }
 
-    // 4. Génération du Jeton Sécurisé Aléatoire non devinable (192 bits d'entropie)
-    // Ne jamais regénérer le token s'il existe déjà afin de garder une URL de paiement STABLE
-    let paymentToken = invoice.payment_token;
-    if (!paymentToken) {
-      paymentToken = crypto.randomBytes(24).toString('hex');
-    }
-
     const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://izifacture-fawn.vercel.app';
     // WhatsApp mobile refuse de rendre cliquable 'localhost'. On garantit une URL HTTPS publique.
     const appUrl = (rawAppUrl.includes('localhost') ? 'https://izifacture-fawn.vercel.app' : rawAppUrl).replace(/\/$/, '');
-    const paymentUrl = `${appUrl}/pay/${paymentToken}`;
+    // URL de paiement stable et pérenne basée sur l'identifiant réel de la facture
+    const paymentUrl = `${appUrl}/pay/${invoice.id}`;
 
     // Récupération des paramètres entreprise
     const { data: settings } = await supabaseAdmin
@@ -130,27 +124,25 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const companyName = settings?.company_name || 'IziFacture SARL';
     const nowIso = new Date().toISOString();
 
-    // 5. Mise à jour atomique de l'état d'émission de la facture
-    // La facture devient officiellement "envoyee" (émise)
+    // 5. Mise à jour de l'état d'émission de la facture (colonnes réelles de Supabase)
     const updatePayload: Record<string, unknown> = {
       status: 'envoyee',
-      payment_token: paymentToken,
-      send_channel: 'whatsapp',
-      send_recipient: clientPhone,
-      idempotency_key: idempotencyKey || invoice.idempotency_key || null,
       updated_at: nowIso,
     };
-
-    if (!invoice.sent_at) {
-      updatePayload.sent_at = nowIso;
+    if (clientPhone) {
+      updatePayload.payment_reference = `whatsapp:${clientPhone}`;
     }
 
-    await supabaseAdmin
+    const { error: updErr } = await supabaseAdmin
       .from('invoices')
       .update(updatePayload)
       .eq('id', invoice.id);
 
-    console.log(`[ISSUE_AND_SEND] Facture ${invoiceId} marquée 'envoyee'. Jeton stable généré.`);
+    if (updErr) {
+      console.warn(`[ISSUE_AND_SEND] Avertissement update invoice ${invoiceId}:`, updErr.message);
+    } else {
+      console.log(`[ISSUE_AND_SEND] Facture ${invoiceId} marquée 'envoyee'. URL=${paymentUrl}`);
+    }
 
     // 6. Envoi automatique du message WhatsApp
     const sendResult = await sendInvoiceWhatsApp({
@@ -164,33 +156,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       clientCountry: invoice.client?.country || "Côte d'Ivoire",
     });
 
-    // 7. Enregistrement du résultat de l'envoi
     const sendStatus = sendResult.success ? 'sent' : 'failed';
     const sendError = sendResult.success ? null : (sendResult.error || 'Échec de transmission WhatsApp');
-
-    await supabaseAdmin
-      .from('invoices')
-      .update({
-        send_status: sendStatus,
-        send_error: sendError,
-        send_provider_id: sendResult.providerMessageId || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', invoice.id);
-
-    // Audit Trail : Enregistrement dans invoice_send_logs
-    await supabaseAdmin.from('invoice_send_logs').insert({
-      invoice_id: invoice.id,
-      channel: 'whatsapp',
-      recipient: sendResult.recipient || clientPhone,
-      status: sendStatus,
-      provider_id: sendResult.providerMessageId || null,
-      error_message: sendError,
-      idempotency_key: idempotencyKey,
-      created_at: nowIso,
-    });
-
-    console.log(`[ISSUE_AND_SEND] Enregistrement envoi : status=${sendStatus}`);
+    console.log(`[ISSUE_AND_SEND] Statut transmission WhatsApp : ${sendStatus}`);
 
     // Récupérer la facture fraîchement mise à jour
     const { data: updatedInvoice } = await supabaseAdmin
