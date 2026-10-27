@@ -166,12 +166,24 @@ function mapDbToInvoice(row: DbRow, clientsList: Client[]): Invoice {
     };
   }
 
-  const items: InvoiceItem[] = Array.isArray(row.items)
+  let items: InvoiceItem[] = Array.isArray(row.items) && row.items.length > 0
     ? row.items.map((it) => ({
         id: it.id, description: it.description || '',
         quantity: Number(it.quantity || 1), unitPrice: Number(it.unit_price || 0), total: Number(it.total || 0),
       }))
     : [];
+
+  // Fallback de sécurité : si aucun article n'est associé mais que la facture a un montant (ex: anciennes factures),
+  // on génère une ligne de prestation pour que le tableau ne soit jamais vide à l'affichage
+  if (items.length === 0 && (row.amount || row.subtotal)) {
+    items = [{
+      id: `item-fallback-${row.id}`,
+      description: row.service_type || 'Prestation de services',
+      quantity: 1,
+      unitPrice: Number(row.subtotal || row.amount || 0),
+      total: Number(row.subtotal || row.amount || 0),
+    }];
+  }
 
   return {
     id: row.id,
@@ -314,6 +326,7 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
       .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => { fetchDataFromSupabase(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => { fetchDataFromSupabase(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoice_items' }, () => { fetchDataFromSupabase(); })
       .subscribe();
 
     return () => { supabase.removeChannel(invoiceChannel); };
