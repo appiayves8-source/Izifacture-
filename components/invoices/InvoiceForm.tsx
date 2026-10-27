@@ -231,18 +231,54 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
     try {
       if (isEditMode && initialInvoice) {
         updateInvoice(initialInvoice.id, payload);
+        if (targetStatus === 'envoyee') {
+          try {
+            const sendRes = await fetch(`/api/invoices/${initialInvoice.id}/issue-and-send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ resend: true, phone: selectedClient?.phone }),
+            });
+            const sendData = await sendRes.json().catch(() => ({}));
+            if (sendData?.whatsappUrl) {
+              window.open(sendData.whatsappUrl, '_blank', 'noopener,noreferrer');
+            }
+          } catch (sendErr) {
+            console.warn('Erreur transmission WhatsApp:', sendErr);
+          }
+        }
         setSuccessMsg('Facture mise à jour avec succès.');
         setTimeout(() => {
           router.push(`/invoices/${initialInvoice.id}`);
-        }, 800);
+        }, 1200);
       } else {
-        // ⬇️ Await : on attend que Supabase confirme l'insertion avant de rediriger
+        // ⬇️ Await : on attend que Supabase confirme l'insertion avant d'émettre
         const created = await addInvoice(payload);
         incrementInvoiceCount();
-        setSuccessMsg(`Facture ${created.invoiceNumber} créée avec succès. Redirection...`);
+
+        if (targetStatus === 'envoyee') {
+          setSuccessMsg(`Facture ${created.invoiceNumber} enregistrée. Préparation de l'envoi WhatsApp...`);
+          try {
+            const sendRes = await fetch(`/api/invoices/${created.id}/issue-and-send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: selectedClient?.phone }),
+            });
+            const sendData = await sendRes.json().catch(() => ({}));
+            if (sendData?.whatsappUrl) {
+              // Ouverture automatique de WhatsApp (fonctionne pour WhatsApp standard et Business)
+              window.open(sendData.whatsappUrl, '_blank', 'noopener,noreferrer');
+            }
+          } catch (sendErr) {
+            console.warn('Erreur transmission WhatsApp:', sendErr);
+          }
+          setSuccessMsg(`Facture ${created.invoiceNumber} émise ! WhatsApp ouvert avec le message prêt à envoyer.`);
+        } else {
+          setSuccessMsg(`Brouillon de la facture ${created.invoiceNumber} enregistré avec succès.`);
+        }
+
         setTimeout(() => {
           router.push(`/invoices/${created.id}`);
-        }, 800);
+        }, 1200);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

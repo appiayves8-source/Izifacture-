@@ -54,6 +54,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select('role')
         .eq('id', userId)
         .maybeSingle();
+
+      if (!data) {
+        // Profil manquant : auto-création pour éviter les erreurs de clé étrangère
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && user.id === userId) {
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            email: user.email,
+            is_subscribed: true,
+            role: 'user',
+          }, { onConflict: 'id' });
+        }
+      }
+
       if (data?.role === 'admin') {
         setRole('admin');
       } else {

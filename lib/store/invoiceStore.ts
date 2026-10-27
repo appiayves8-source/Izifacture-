@@ -346,28 +346,35 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
 
       // ① UPSERT du client en premier pour garantir la contrainte FK
       // (Le client peut exister en localStorage mais pas encore en Supabase)
-      if (invoiceData.client && invoiceData.clientId) {
-        const clientPayload = {
+      const targetClient = invoiceData.client || clients.find((c) => c.id === invoiceData.clientId);
+      if (invoiceData.clientId) {
+        const clientPayload: Record<string, unknown> = {
           id: invoiceData.clientId,
-          name: invoiceData.client.name || 'Client',
-          email: invoiceData.client.email || null,
-          phone: invoiceData.client.phone || null,
-          address: invoiceData.client.address || null,
-          city: invoiceData.client.city || 'Abidjan',
-          country: invoiceData.client.country || "Côte d'Ivoire",
+          name: targetClient?.name || 'Client',
+          email: targetClient?.email || null,
+          phone: targetClient?.phone || null,
+          address: targetClient?.address || null,
+          city: targetClient?.city || 'Abidjan',
+          country: targetClient?.country || "Côte d'Ivoire",
           user_id: user?.id || null,
         };
-        const { error: clientErr } = await supabase
+        let { error: clientErr } = await supabase
           .from('clients')
           .upsert(clientPayload, { onConflict: 'id', ignoreDuplicates: false });
         if (clientErr) {
-          console.warn('Avertissement upsert client avant facture:', clientErr.message);
-          // Non bloquant — on continue si le client existe déjà
+          console.warn('Erreur upsert client initial, nouvel essai sans user_id:', clientErr.message);
+          const { error: clientRetryErr } = await supabase
+            .from('clients')
+            .upsert({ ...clientPayload, user_id: null }, { onConflict: 'id', ignoreDuplicates: false });
+          if (clientRetryErr) {
+            console.error('Erreur finale upsert client:', clientRetryErr.message);
+            throw new Error(`Impossible d'enregistrer le client : ${clientRetryErr.message}`);
+          }
         }
       }
 
       // ② Insertion de la facture
-      const { error: invErr } = await supabase.from('invoices').insert({
+      const invPayload: Record<string, unknown> = {
         id, invoice_number: invoiceNumber, client_id: invoiceData.clientId,
         issue_date: invoiceData.issueDate, due_date: invoiceData.dueDate,
         status: invoiceData.status, service_type: invoiceData.serviceType,
@@ -375,7 +382,17 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
         tax_amount: invoiceData.taxAmount, amount: invoiceData.amount,
         payment_method: invoiceData.paymentMethod || null, notes: invoiceData.notes || null,
         user_id: user?.id || null,
-      });
+      };
+
+      let { error: invErr } = await supabase.from('invoices').insert(invPayload);
+      if (invErr && invErr.message?.includes('user_id')) {
+        console.warn('Erreur insertion facture avec user_id, nouvel essai sans user_id:', invErr.message);
+        const { error: invFallbackErr } = await supabase.from('invoices').insert({
+          ...invPayload,
+          user_id: null,
+        });
+        invErr = invFallbackErr;
+      }
       if (invErr) {
         console.error('Erreur Supabase addInvoice:', invErr.message);
         throw new Error(invErr.message);
@@ -463,12 +480,19 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
     // ⬇️ Insertion SYNCHRONE dans Supabase — attend la confirmation DB
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('clients').insert({
+      const clientPayload: Record<string, unknown> = {
         id, name: clientData.name, email: clientData.email,
         phone: clientData.phone, address: clientData.address,
         city: clientData.city, country: clientData.country,
         user_id: user?.id || null,
-      });
+      };
+      let { error } = await supabase.from('clients').insert(clientPayload);
+      if (error && error.message?.includes('user_id')) {
+        console.warn('Erreur addClient avec user_id, nouvel essai sans user_id:', error.message);
+        delete clientPayload.user_id;
+        const { error: retryError } = await supabase.from('clients').insert(clientPayload);
+        error = retryError;
+      }
       if (error) {
         console.error('Erreur Supabase addClient:', error.message);
         throw new Error(error.message);
