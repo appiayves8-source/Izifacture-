@@ -77,16 +77,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       );
     }
 
-    // c. Client et coordonnées de contact valides (Téléphone requis pour WhatsApp)
-    const clientPhone = invoice.client?.phone || body.phone;
+    // c. Client et coordonnées de contact (Téléphone recommandé mais non bloquant pour wa.me)
+    const clientPhone = invoice.client?.phone || body.phone || '';
     if (!clientPhone || String(clientPhone).trim().length < 6) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Le client "${invoice.client?.name || 'Inconnu'}" n'a pas de numéro de téléphone valide enregistré pour l'envoi WhatsApp. Veuillez modifier le client.`,
-        },
-        { status: 400 }
-      );
+      console.warn(`[ISSUE_AND_SEND] Client "${invoice.client?.name}" sans téléphone valide. Émission sans envoi WhatsApp automatique.`);
     }
 
     // d. Facture déjà payée ?

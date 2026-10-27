@@ -75,10 +75,10 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
     initialInvoice?.items || [
       {
         id: 'item-1',
-        description: 'Prestation d’ingénierie / conseils',
-        quantity: 1,
-        unitPrice: 500000,
-        total: 500000,
+        description: '',
+        quantity: 0,
+        unitPrice: 0,
+        total: 0,
       },
     ]
   );
@@ -138,7 +138,7 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
     if (field === 'description') {
       current.description = String(value);
     } else if (field === 'quantity') {
-      const q = Math.max(1, parseInt(String(value), 10) || 1);
+      const q = Math.max(0, parseInt(String(value), 10) || 0);
       current.quantity = q;
       current.total = Math.round(q * current.unitPrice);
     } else if (field === 'unitPrice') {
@@ -156,7 +156,7 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
     const newItem: InvoiceItem = {
       id: `item-${Date.now()}`,
       description: '',
-      quantity: 1,
+      quantity: 0,
       unitPrice: 0,
       total: 0,
     };
@@ -478,7 +478,7 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
             <thead>
               <tr className="border-b border-[#D4AF37]/15 bg-[#090A0F]/70 text-xs font-semibold text-[#D4AF37]/80 uppercase tracking-wider font-sans">
                 <th className="py-4 px-6 w-14 text-center">#</th>
-                <th className="py-4 px-5">Description du service ou produit</th>
+                <th className="py-4 px-5">Nom du produit</th>
                 <th className="py-4 px-5 w-32 text-center">Quantité</th>
                 <th className="py-4 px-5 w-52 text-right">Prix Unitaire HT (FCFA)</th>
                 <th className="py-4 px-5 w-52 text-right">Total HT (FCFA)</th>
@@ -499,8 +499,8 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
                       type="text"
                       value={item.description}
                       onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                      placeholder="Description de la prestation..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/20 text-white font-medium placeholder-slate-500 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] transition-all text-sm"
+                      placeholder="Nom du produit"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/20 text-white font-medium placeholder-slate-400/40 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] transition-all text-sm"
                     />
                   </td>
 
@@ -508,7 +508,7 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
                   <td className="py-4 px-5">
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       value={item.quantity}
                       onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/20 text-[#F5E6B3] font-mono font-bold text-center focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] transition-all text-sm"

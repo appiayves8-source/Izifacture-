@@ -70,7 +70,7 @@ export default function ClientsPage() {
   const handleSaveClient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      setErrorMsg('Le nom du client / raison sociale est obligatoire.');
+      setErrorMsg('Le nom du client est obligatoire.');
       return;
     }
 
@@ -303,14 +303,14 @@ export default function ClientsPage() {
             <form onSubmit={handleSaveClient} className="space-y-3.5 text-xs">
               <div>
                 <label className="font-semibold text-slate-300 block mb-1">
-                  Nom de l&apos;entreprise / Raison sociale <span className="text-[#D4AF37]">*</span>
+                  Nom du client <span className="text-[#D4AF37]">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex : Société Ivoirienne de Négoce (SIN SARL)"
+                  placeholder="Ex : Jean Dupont ou Société Ivoirienne de Négoce"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-[#181926] border border-[#D4AF37]/20 text-white font-medium placeholder-slate-500 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] transition-all"
                 />
               </div>

@@ -333,7 +333,9 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
     invoiceData: Omit<Invoice, 'id' | 'invoiceNumber'> & { id?: string; invoiceNumber?: string }
   ): Invoice => {
     const id = invoiceData.id || `inv-${Date.now()}`;
-    const nextNumber = `FAC-2024-00${String(invoices.length + 90).padStart(2, '0')}`;
+    const currentYear = new Date().getFullYear();
+    const nextSeq = invoices.length + 1;
+    const nextNumber = `FAC-${currentYear}-${String(nextSeq).padStart(4, '0')}`;
     const invoiceNumber = invoiceData.invoiceNumber || nextNumber;
     const newInvoice: Invoice = { ...invoiceData, id, invoiceNumber };
     saveInvoices([newInvoice, ...invoices]);

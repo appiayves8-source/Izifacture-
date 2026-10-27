@@ -90,16 +90,18 @@ export default function InvoiceDetailPage() {
 
       await refreshData();
 
+      // Ouvrir automatiquement WhatsApp dans un nouvel onglet (wa.me fonctionne
+      // sur WhatsApp normal ET WhatsApp Business, sans aucune clé API)
+      if (data.whatsappUrl) {
+        window.open(data.whatsappUrl, '_blank', 'noopener,noreferrer');
+      }
+
       if (data.sendStatus === 'sent') {
-        showToast('Facture émise et transmise par WhatsApp !');
+        showToast('✅ Facture émise et transmise par WhatsApp !');
       } else {
-        setFeedbackModal({
-          open: true,
-          title: isResend ? 'Renvoi de la Facture' : 'Facture Émise avec Succès !',
-          message: data.message || "La facture est émise avec son lien de paiement unique. Vous pouvez finaliser la transmission WhatsApp ci-dessous.",
-          sendStatus: data.sendStatus,
-          whatsappUrl: data.whatsappUrl,
-        });
+        // WhatsApp s'est ouvert automatiquement via wa.me
+        // On affiche juste un toast de confirmation simple
+        showToast('✅ Facture émise ! WhatsApp ouvert avec le message prêt à envoyer.');
       }
     } catch (err: unknown) {
       console.error('[InvoiceDetail] Erreur issue-and-send:', err);
@@ -516,7 +518,7 @@ export default function InvoiceDetailPage() {
             <thead>
               <tr className="border-b border-[#D4AF37]/15 print:border-slate-300 bg-[#090A0F]/80 print:bg-slate-100 text-[11px] print:text-xs font-bold text-[#D4AF37]/90 print:text-slate-800 uppercase tracking-wider font-sans">
                 <th className="py-3.5 print:py-3 px-6 print:px-4 w-12 text-center">#</th>
-                <th className="py-3.5 print:py-3 px-4 print:px-4">Désignation des prestations / articles</th>
+                <th className="py-3.5 print:py-3 px-4 print:px-4">Nom du produit</th>
                 <th className="py-3.5 print:py-3 px-4 print:px-4 w-28 text-center">Quantité</th>
                 <th className="py-3.5 print:py-3 px-4 print:px-4 w-44 text-right">Prix Unitaire HT</th>
                 <th className="py-3.5 print:py-3 px-6 print:px-4 w-44 text-right">Total HT (FCFA)</th>
