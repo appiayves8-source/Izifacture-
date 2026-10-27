@@ -67,36 +67,40 @@ export default function ClientsPage() {
     setModalOpen(true);
   };
 
-  const handleSaveClient = (e: React.FormEvent) => {
+  const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setErrorMsg('Le nom du client est obligatoire.');
       return;
     }
 
-    if (editingClient) {
-      updateClient(editingClient.id, {
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
-        city: city.trim() || 'Abidjan',
-        country: country.trim() || "Côte d'Ivoire",
-      });
-      showToast(`Client ${name} mis à jour avec succès.`);
-    } else {
-      addClient({
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
-        city: city.trim() || 'Abidjan',
-        country: country.trim() || "Côte d'Ivoire",
-      });
-      showToast(`Client ${name} ajouté avec succès.`);
+    try {
+      if (editingClient) {
+        updateClient(editingClient.id, {
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          address: address.trim(),
+          city: city.trim() || 'Abidjan',
+          country: country.trim() || "Côte d'Ivoire",
+        });
+        showToast(`Client ${name} mis à jour avec succès.`);
+      } else {
+        await addClient({
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          address: address.trim(),
+          city: city.trim() || 'Abidjan',
+          country: country.trim() || "Côte d'Ivoire",
+        });
+        showToast(`Client ${name} ajouté avec succès.`);
+      }
+      setModalOpen(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(`Erreur lors de l'enregistrement du client : ${msg}`);
     }
-
-    setModalOpen(false);
   };
 
   const handleDelete = (id: string) => {

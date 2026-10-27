@@ -212,7 +212,7 @@ interface InvoiceStoreValue {
   deleteInvoice: (id: string) => boolean;
   updateInvoiceStatus: (id: string, newStatus: InvoiceStatus) => Invoice | null;
   getInvoice: (id: string) => Invoice | undefined;
-  addClient: (data: Omit<Client, 'id'>) => Client;
+  addClient: (data: Omit<Client, 'id'>) => Promise<Client>;
   updateClient: (id: string, updates: Partial<Client>) => Client | null;
   deleteClient: (id: string) => boolean;
   getClient: (id: string) => Client | undefined;
@@ -343,6 +343,30 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
     // avant de mettre à jour le state local et de retourner
     try {
       const { data: { user } } = await supabase.auth.getUser();
+
+      // ① UPSERT du client en premier pour garantir la contrainte FK
+      // (Le client peut exister en localStorage mais pas encore en Supabase)
+      if (invoiceData.client && invoiceData.clientId) {
+        const clientPayload = {
+          id: invoiceData.clientId,
+          name: invoiceData.client.name || 'Client',
+          email: invoiceData.client.email || null,
+          phone: invoiceData.client.phone || null,
+          address: invoiceData.client.address || null,
+          city: invoiceData.client.city || 'Abidjan',
+          country: invoiceData.client.country || "Côte d'Ivoire",
+          user_id: user?.id || null,
+        };
+        const { error: clientErr } = await supabase
+          .from('clients')
+          .upsert(clientPayload, { onConflict: 'id', ignoreDuplicates: false });
+        if (clientErr) {
+          console.warn('Avertissement upsert client avant facture:', clientErr.message);
+          // Non bloquant — on continue si le client existe déjà
+        }
+      }
+
+      // ② Insertion de la facture
       const { error: invErr } = await supabase.from('invoices').insert({
         id, invoice_number: invoiceNumber, client_id: invoiceData.clientId,
         issue_date: invoiceData.issueDate, due_date: invoiceData.dueDate,
@@ -357,6 +381,7 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
         throw new Error(invErr.message);
       }
 
+      // ③ Insertion des articles
       if (invoiceData.items && invoiceData.items.length > 0) {
         const itemsToInsert = invoiceData.items.map((item, idx) => ({
           id: item.id || `item-${Date.now()}-${idx}`, invoice_id: id,
@@ -431,21 +456,29 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
 
   const getInvoice = (id: string) => invoices.find((inv) => inv.id === id);
 
-  const addClient = (clientData: Omit<Client, 'id'>): Client => {
+  const addClient = async (clientData: Omit<Client, 'id'>): Promise<Client> => {
     const id = `cli-${Date.now()}`;
     const newClient: Client = { ...clientData, id, totalBilled: 0, invoicesCount: 0 };
+
+    // ⬇️ Insertion SYNCHRONE dans Supabase — attend la confirmation DB
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('clients').insert({
+        id, name: clientData.name, email: clientData.email,
+        phone: clientData.phone, address: clientData.address,
+        city: clientData.city, country: clientData.country,
+        user_id: user?.id || null,
+      });
+      if (error) {
+        console.error('Erreur Supabase addClient:', error.message);
+        throw new Error(error.message);
+      }
+    } catch (err) {
+      console.error('Erreur addClient Supabase:', err);
+      throw err;
+    }
+
     saveClients([newClient, ...clients]);
-    (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from('clients').insert({
-          id, name: clientData.name, email: clientData.email,
-          phone: clientData.phone, address: clientData.address,
-          city: clientData.city, country: clientData.country,
-          user_id: user?.id || null,
-        });
-      } catch (err) { console.error('Erreur addClient Supabase:', err); }
-    })();
     return newClient;
   };
 
@@ -506,7 +539,7 @@ export function useInvoiceStore(): InvoiceStoreValue {
       deleteInvoice: () => false,
       updateInvoiceStatus: () => null,
       getInvoice: (id: string) => INITIAL_INVOICES.find((inv) => inv.id === id),
-      addClient: () => INITIAL_CLIENTS[0],
+      addClient: async () => INITIAL_CLIENTS[0],
       updateClient: () => null,
       deleteClient: () => false,
       getClient: (id: string) => INITIAL_CLIENTS.find((cli) => cli.id === id),
