@@ -92,9 +92,27 @@ export default function Sidebar({ isOpen = false, onClose, adminMode = false }: 
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [logoutSuccessToast, setLogoutSuccessToast] = useState(false);
 
-  // Prélèvement anticipé de la page de connexion pour une ouverture instantanée
+  // Préchargement anticipé immédiat de toutes les routes principales de l'application
   useEffect(() => {
-    router.prefetch('/login');
+    const routesToPrefetch = [
+      '/admin',
+      '/dashboard',
+      '/invoices',
+      '/invoices/new',
+      '/quotes',
+      '/clients',
+      '/payments',
+      '/settings',
+      '/support',
+      '/login',
+    ];
+    routesToPrefetch.forEach((r) => {
+      try {
+        router.prefetch(r);
+      } catch {
+        /* ignore */
+      }
+    });
   }, [router]);
 
   const handleConfirmLogout = () => {
