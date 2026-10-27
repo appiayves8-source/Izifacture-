@@ -398,10 +398,20 @@ export default function QuotesPage() {
   // Charger les devis depuis Supabase
   const loadQuotesFromSupabase = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      let query = supabase
         .from('quotes')
         .select('*, client:clients(*), items:quote_items(*)')
         .order('issue_date', { ascending: false });
+
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+        if (profile?.role !== 'admin') {
+          query = query.eq('user_id', user.id);
+        }
+      }
+
+      const { data, error } = await query;
 
       if (!error && Array.isArray(data)) {
         const loaded: Quote[] = data.map((q: { id: string; quote_number: string; client?: Client; client_id?: string; issue_date: string; valid_until: string; status: string; subtotal?: number; tax_amount?: number; amount?: number; notes?: string; items?: Array<{ id: string; description?: string; quantity?: number; unit_price?: number; total?: number }> }) => ({
@@ -476,6 +486,7 @@ export default function QuotesPage() {
 
     // Persistance Supabase
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('quotes').insert({
         id: q.id,
         quote_number: q.quoteNumber,
@@ -487,6 +498,7 @@ export default function QuotesPage() {
         tax_amount: q.taxAmount,
         amount: q.amount,
         notes: q.notes || null,
+        user_id: user?.id || null,
       });
 
       if (q.items && q.items.length > 0) {

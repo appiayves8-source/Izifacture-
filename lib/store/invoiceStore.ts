@@ -249,8 +249,23 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
 
   const fetchDataFromSupabase = useCallback(async () => {
     try {
-      const { data: dbClients, error: clientsErr } = await supabase
-        .from('clients').select('*').order('name');
+      const { data: { user } } = await supabase.auth.getUser();
+      let clientsQuery = supabase.from('clients').select('*').order('name');
+      let invoicesQuery = supabase
+        .from('invoices')
+        .select('*, client:clients(*), items:invoice_items(*)')
+        .order('issue_date', { ascending: false });
+
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+        const isAdmin = profile?.role === 'admin';
+        if (!isAdmin) {
+          clientsQuery = clientsQuery.eq('user_id', user.id);
+          invoicesQuery = invoicesQuery.eq('user_id', user.id);
+        }
+      }
+
+      const { data: dbClients, error: clientsErr } = await clientsQuery;
 
       let parsedClients: Client[] = [];
       if (!clientsErr && Array.isArray(dbClients)) {
@@ -263,10 +278,7 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
         console.warn('Erreur lecture clients Supabase:', clientsErr.message);
       }
 
-      const { data: dbInvoices, error: invErr } = await supabase
-        .from('invoices')
-        .select('*, client:clients(*), items:invoice_items(*)')
-        .order('issue_date', { ascending: false });
+      const { data: dbInvoices, error: invErr } = await invoicesQuery;
 
       if (!invErr && dbInvoices) {
         const parsedInvoices = (dbInvoices as DbRow[]).map((inv) => mapDbToInvoice(inv, parsedClients));
@@ -328,6 +340,7 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
 
     (async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
         const { error: invErr } = await supabase.from('invoices').insert({
           id, invoice_number: invoiceNumber, client_id: invoiceData.clientId,
           issue_date: invoiceData.issueDate, due_date: invoiceData.dueDate,
@@ -335,6 +348,7 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
           subtotal: invoiceData.subtotal, tax_rate: invoiceData.taxRate,
           tax_amount: invoiceData.taxAmount, amount: invoiceData.amount,
           payment_method: invoiceData.paymentMethod || null, notes: invoiceData.notes || null,
+          user_id: user?.id || null,
         });
         if (invErr) { console.error('Erreur Supabase addInvoice:', invErr.message); return; }
 
@@ -414,10 +428,12 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
     saveClients([newClient, ...clients]);
     (async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
         await supabase.from('clients').insert({
           id, name: clientData.name, email: clientData.email,
           phone: clientData.phone, address: clientData.address,
           city: clientData.city, country: clientData.country,
+          user_id: user?.id || null,
         });
       } catch (err) { console.error('Erreur addClient Supabase:', err); }
     })();

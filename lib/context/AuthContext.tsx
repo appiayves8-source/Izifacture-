@@ -1,13 +1,17 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
+
+export type UserRole = 'admin' | 'user';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  role: UserRole;
+  isAdmin: boolean;
   displayName: string;
   firstName: string;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -23,6 +27,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  role: 'user',
+  isAdmin: false,
   displayName: 'Cyrille',
   firstName: 'Cyrille',
   signIn: async () => ({ error: null }),
@@ -38,6 +44,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<UserRole>('user');
+
+  // Fetch role from profiles table — called after every auth state change
+  const fetchRole = useCallback(async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+      if (data?.role === 'admin') {
+        setRole('admin');
+      } else {
+        setRole('user');
+      }
+    } catch {
+      setRole('user');
+    }
+  }, []);
 
   useEffect(() => {
     // Timeout de sécurité : si Supabase ne répond pas en 5s, on débloque l'UI
@@ -49,7 +74,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(authTimeout);
       setSession(session);
-      setUser(session?.user ?? null);
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) fetchRole(u.id);
       setLoading(false);
     }).catch(() => {
       clearTimeout(authTimeout);
@@ -62,7 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       clearTimeout(authTimeout);
       setSession(session);
-      setUser(session?.user ?? null);
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) {
+        fetchRole(u.id);
+      } else {
+        setRole('user');
+      }
       setLoading(false);
     });
 
@@ -70,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(authTimeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchRole]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -235,11 +268,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 1. Réinitialiser immédiatement l'état React pour une transition instantanée (0 ms)
     setUser(null);
     setSession(null);
+    setRole('user');
 
     // 2. Nettoyage immédiat des caches locaux
     if (typeof window !== 'undefined') {
       try {
         localStorage.removeItem('izifacture_sub_cache_v1');
+        localStorage.removeItem('izifacture_invoices_v1');
+        localStorage.removeItem('izifacture_clients_v1');
       } catch { }
     }
 
@@ -258,12 +294,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const displayName = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : 'Cyrille';
   const firstName = displayName.split(/\s+/)[0] || 'Cyrille';
 
+  const isAdmin = role === 'admin';
+
   return (
     <AuthContext.Provider
       value={{
         user,
         session,
         loading,
+        role,
+        isAdmin,
         displayName,
         firstName,
         signIn,

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/context/AuthContext';
 import { supabase } from '@/lib/supabase/client';
@@ -271,18 +272,20 @@ export default function LoginPage() {
       <div className="w-full max-w-md relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[#DFBA55] via-[#D4AF37] to-[#8C6709] shadow-[0_4px_25px_rgba(212,175,55,0.4)] mb-3">
+          <Link href="/" className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[#DFBA55] via-[#D4AF37] to-[#8C6709] shadow-[0_4px_25px_rgba(212,175,55,0.4)] mb-3 hover:shadow-[0_4px_30px_rgba(212,175,55,0.6)] hover:scale-105 transition-all duration-200">
             <div className="grid grid-cols-2 gap-1.5 p-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-black"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-amber-100"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-amber-100"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-black"></span>
             </div>
-          </div>
+          </Link>
           <div className="flex items-center justify-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-sans">
-              IziFacture
-            </h1>
+            <Link href="/" className="group">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-sans group-hover:text-[#E5C158] transition-colors duration-200 cursor-pointer">
+                IziFacture
+              </h1>
+            </Link>
             <span className="px-2 py-0.5 text-[10px] font-bold bg-[#D4AF37]/20 text-[#E5C158] rounded-full border border-[#D4AF37]/40">
               UEMOA
             </span>

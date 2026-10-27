@@ -26,6 +26,7 @@ import { useSubscription } from '@/lib/hooks/useSubscription';
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
+  adminMode?: boolean;
 }
 
 export const navigationGroups = [
@@ -34,7 +35,7 @@ export const navigationGroups = [
     items: [
       {
         name: "Vue d'ensemble",
-        href: '/dashboard',
+        href: '/admin',
         icon: LayoutGrid,
       },
       {
@@ -82,10 +83,10 @@ export const navigationGroups = [
   },
 ];
 
-export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen = false, onClose, adminMode = false }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const { invoices } = useInvoiceStore();
   const { isActive } = useSubscription();
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
@@ -127,15 +128,18 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </h3>
           <div className="space-y-1">
             {group.items.map((item) => {
-              const isActive = pathname === item.href || (item.href === '/dashboard' && pathname === '/dashboard');
+              const targetHref = item.name === "Vue d'ensemble"
+                ? (adminMode || isAdmin ? '/admin' : '/dashboard')
+                : item.href;
+              const isActive = pathname === targetHref;
               const Icon = item.icon;
 
               return (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  href={targetHref}
                   prefetch={true}
-                  onMouseEnter={() => router.prefetch(item.href)}
+                  onMouseEnter={() => router.prefetch(targetHref)}
                   onClick={() => onClose && onClose()}
                   className={`group flex items-center justify-between rounded-xl font-medium transition-all duration-200 ${
                     isMobile
