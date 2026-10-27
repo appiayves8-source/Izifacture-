@@ -207,7 +207,7 @@ interface InvoiceStoreValue {
   invoices: Invoice[];
   clients: Client[];
   isLoaded: boolean;
-  addInvoice: (data: Omit<Invoice, 'id' | 'invoiceNumber'> & { id?: string; invoiceNumber?: string }) => Invoice;
+  addInvoice: (data: Omit<Invoice, 'id' | 'invoiceNumber'> & { id?: string; invoiceNumber?: string }) => Promise<Invoice>;
   updateInvoice: (id: string, updates: Partial<Invoice>) => Invoice | null;
   deleteInvoice: (id: string) => boolean;
   updateInvoiceStatus: (id: string, newStatus: InvoiceStatus) => Invoice | null;
@@ -329,43 +329,50 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
     try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(newClients)); } catch { /* ignore */ }
   };
 
-  const addInvoice = (
+  const addInvoice = async (
     invoiceData: Omit<Invoice, 'id' | 'invoiceNumber'> & { id?: string; invoiceNumber?: string }
-  ): Invoice => {
+  ): Promise<Invoice> => {
     const id = invoiceData.id || `inv-${Date.now()}`;
     const currentYear = new Date().getFullYear();
     const nextSeq = invoices.length + 1;
     const nextNumber = `FAC-${currentYear}-${String(nextSeq).padStart(4, '0')}`;
     const invoiceNumber = invoiceData.invoiceNumber || nextNumber;
     const newInvoice: Invoice = { ...invoiceData, id, invoiceNumber };
+
+    // ⬇️ Insertion SYNCHRONE dans Supabase — on attend la confirmation DB
+    // avant de mettre à jour le state local et de retourner
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: invErr } = await supabase.from('invoices').insert({
+        id, invoice_number: invoiceNumber, client_id: invoiceData.clientId,
+        issue_date: invoiceData.issueDate, due_date: invoiceData.dueDate,
+        status: invoiceData.status, service_type: invoiceData.serviceType,
+        subtotal: invoiceData.subtotal, tax_rate: invoiceData.taxRate,
+        tax_amount: invoiceData.taxAmount, amount: invoiceData.amount,
+        payment_method: invoiceData.paymentMethod || null, notes: invoiceData.notes || null,
+        user_id: user?.id || null,
+      });
+      if (invErr) {
+        console.error('Erreur Supabase addInvoice:', invErr.message);
+        throw new Error(invErr.message);
+      }
+
+      if (invoiceData.items && invoiceData.items.length > 0) {
+        const itemsToInsert = invoiceData.items.map((item, idx) => ({
+          id: item.id || `item-${Date.now()}-${idx}`, invoice_id: id,
+          description: item.description, quantity: item.quantity,
+          unit_price: item.unitPrice, total: item.total, sort_order: idx + 1,
+        }));
+        const { error: itemsErr } = await supabase.from('invoice_items').insert(itemsToInsert);
+        if (itemsErr) console.error('Erreur Supabase insert invoice_items:', itemsErr.message);
+      }
+    } catch (err) {
+      console.error('Erreur addInvoice Supabase:', err);
+      throw err; // Remonter l'erreur au formulaire pour afficher un message
+    }
+
+    // Mise à jour du state local après confirmation Supabase
     saveInvoices([newInvoice, ...invoices]);
-
-    (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const { error: invErr } = await supabase.from('invoices').insert({
-          id, invoice_number: invoiceNumber, client_id: invoiceData.clientId,
-          issue_date: invoiceData.issueDate, due_date: invoiceData.dueDate,
-          status: invoiceData.status, service_type: invoiceData.serviceType,
-          subtotal: invoiceData.subtotal, tax_rate: invoiceData.taxRate,
-          tax_amount: invoiceData.taxAmount, amount: invoiceData.amount,
-          payment_method: invoiceData.paymentMethod || null, notes: invoiceData.notes || null,
-          user_id: user?.id || null,
-        });
-        if (invErr) { console.error('Erreur Supabase addInvoice:', invErr.message); return; }
-
-        if (invoiceData.items && invoiceData.items.length > 0) {
-          const itemsToInsert = invoiceData.items.map((item, idx) => ({
-            id: item.id || `item-${Date.now()}-${idx}`, invoice_id: id,
-            description: item.description, quantity: item.quantity,
-            unit_price: item.unitPrice, total: item.total, sort_order: idx + 1,
-          }));
-          const { error: itemsErr } = await supabase.from('invoice_items').insert(itemsToInsert);
-          if (itemsErr) console.error('Erreur Supabase insert invoice_items:', itemsErr.message);
-        }
-      } catch (err) { console.error('Erreur addInvoice async:', err); }
-    })();
-
     return newInvoice;
   };
 
@@ -494,7 +501,7 @@ export function useInvoiceStore(): InvoiceStoreValue {
       invoices: INITIAL_INVOICES,
       clients: INITIAL_CLIENTS,
       isLoaded: true,
-      addInvoice: () => INITIAL_INVOICES[0],
+      addInvoice: async () => INITIAL_INVOICES[0],
       updateInvoice: () => null,
       deleteInvoice: () => false,
       updateInvoiceStatus: () => null,

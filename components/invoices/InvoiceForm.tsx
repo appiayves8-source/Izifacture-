@@ -183,6 +183,8 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
   // Selected client object
   const selectedClient = clients.find((c) => c.id === selectedClientId) || clients[0];
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (targetStatus: 'brouillon' | 'envoyee') => {
     if (!selectedClientId) {
       setErrorMsg('Veuillez sélectionner un client.');
@@ -195,9 +197,12 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
     }
 
     if (items.some((it) => !it.description.trim())) {
-      setErrorMsg('Veuillez renseigner la description pour toutes les lignes.');
+      setErrorMsg('Veuillez renseigner le nom du produit pour toutes les lignes.');
       return;
     }
+
+    setIsSubmitting(true);
+    setErrorMsg('');
 
     const payload = {
       clientId: selectedClientId,
@@ -223,19 +228,26 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
         .then();
     }
 
-    if (isEditMode && initialInvoice) {
-      updateInvoice(initialInvoice.id, payload);
-      setSuccessMsg('Facture mise à jour avec succès.');
-      setTimeout(() => {
-        router.push(`/invoices/${initialInvoice.id}`);
-      }, 800);
-    } else {
-      const created = addInvoice(payload);
-      incrementInvoiceCount();
-      setSuccessMsg(`Facture ${created.invoiceNumber} créée avec succès.`);
-      setTimeout(() => {
-        router.push(`/invoices/${created.id}`);
-      }, 800);
+    try {
+      if (isEditMode && initialInvoice) {
+        updateInvoice(initialInvoice.id, payload);
+        setSuccessMsg('Facture mise à jour avec succès.');
+        setTimeout(() => {
+          router.push(`/invoices/${initialInvoice.id}`);
+        }, 800);
+      } else {
+        // ⬇️ Await : on attend que Supabase confirme l'insertion avant de rediriger
+        const created = await addInvoice(payload);
+        incrementInvoiceCount();
+        setSuccessMsg(`Facture ${created.invoiceNumber} créée avec succès. Redirection...`);
+        setTimeout(() => {
+          router.push(`/invoices/${created.id}`);
+        }, 800);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(`Erreur lors de la sauvegarde en base de données : ${msg}. Veuillez réessayer.`);
+      setIsSubmitting(false);
     }
   };
 
@@ -275,19 +287,29 @@ export default function InvoiceForm({ initialInvoice, isEditMode = false }: Invo
           <button
             type="button"
             onClick={() => handleSubmit('brouillon')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#13141F] border border-[#D4AF37]/30 text-xs font-semibold text-[#F5E6B3] hover:bg-[#181926] hover:border-[#D4AF37]/60 active:scale-95 transition-all shadow-sm"
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#13141F] border border-[#D4AF37]/30 text-xs font-semibold text-[#F5E6B3] hover:bg-[#181926] hover:border-[#D4AF37]/60 active:scale-95 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Save className="w-4 h-4 text-[#D4AF37]" />
-            <span>Sauvegarder Brouillon</span>
+            {isSubmitting ? (
+              <svg className="w-4 h-4 animate-spin text-[#D4AF37]" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+            ) : (
+              <Save className="w-4 h-4 text-[#D4AF37]" />
+            )}
+            <span>{isSubmitting ? 'Enregistrement...' : 'Sauvegarder Brouillon'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleSubmit('envoyee')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#DFBA55] via-[#D4AF37] to-[#B8860B] hover:from-[#E8C86A] hover:to-[#C69214] text-black text-xs font-bold shadow-[0_2px_15px_rgba(212,175,55,0.3)] hover:shadow-[0_4px_22px_rgba(212,175,55,0.5)] active:scale-95 transition-all duration-200"
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#DFBA55] via-[#D4AF37] to-[#B8860B] hover:from-[#E8C86A] hover:to-[#C69214] text-black text-xs font-bold shadow-[0_2px_15px_rgba(212,175,55,0.3)] hover:shadow-[0_4px_22px_rgba(212,175,55,0.5)] active:scale-95 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Send className="w-4 h-4 stroke-[2.5]" />
-            <span>{isEditMode ? 'Enregistrer & Envoyer' : 'Émettre & Envoyer'}</span>
+            {isSubmitting ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+            ) : (
+              <Send className="w-4 h-4 stroke-[2.5]" />
+            )}
+            <span>{isSubmitting ? 'Enregistrement en cours...' : (isEditMode ? 'Enregistrer & Envoyer' : 'Émettre & Envoyer')}</span>
           </button>
         </div>
       </div>
