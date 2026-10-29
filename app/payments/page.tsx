@@ -300,13 +300,13 @@ export default function PaymentsPage() {
 
   // Synchronisation avec settingsStore pour la banque
   const { settings, updateSettings } = useSettingsStore();
-  const [bankName, setBankName] = useState(settings.bankName || 'Société Générale Côte d’Ivoire (SGCI)');
-  const [iban, setIban] = useState(settings.iban || 'CI93 CI03 4010 0100 1234 5678 9012');
+  const [bankName, setBankName] = useState(settings.bankName || '');
+  const [iban, setIban] = useState(settings.iban || '');
   const [editingBank, setEditingBank] = useState(false);
 
   useEffect(() => {
-    if (settings.bankName) setBankName(settings.bankName);
-    if (settings.iban) setIban(settings.iban);
+    setBankName(settings.bankName || '');
+    setIban(settings.iban || '');
   }, [settings.bankName, settings.iban]);
 
   // Charger les comptes depuis Supabase

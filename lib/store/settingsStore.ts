@@ -47,7 +47,52 @@ export const DEFAULT_SETTINGS: CompanySettings = {
   invoiceFooterNotes: "Paiement exigible à la date d'échéance. Tout retard entraînera des pénalités légales en vigueur dans l'espace OHADA/UEMOA.",
 };
 
-const STORAGE_KEY_SETTINGS = 'izifacture_settings_v1';
+export function createDefaultSettingsForUser(user?: { email?: string; user_metadata?: { full_name?: string } } | null): CompanySettings {
+  const currentYear = new Date().getFullYear();
+  const rawName = user?.user_metadata?.full_name?.trim();
+  const companyName = rawName ? `Entreprise ${rawName}` : 'Mon Entreprise';
+  return {
+    companyName,
+    tagline: 'Facturation & Gestion Commerciale B2B',
+    rccm: '',
+    nif: '',
+    currency: 'Franc CFA (FCFA)',
+    vatRate: 18,
+    phone: '',
+    email: user?.email || '',
+    website: '',
+    address: '',
+    city: 'Abidjan',
+    country: "Côte d'Ivoire",
+    bankName: '',
+    iban: '',
+    mobileMoney: '',
+    invoicePrefix: `FAC-${currentYear}-`,
+    quotePrefix: `DEV-${currentYear}-`,
+    paymentTermsDays: 15,
+    invoiceFooterNotes: "Paiement exigible à la date d'échéance. Tout retard entraînera des pénalités légales en vigueur dans l'espace OHADA/UEMOA.",
+  };
+}
+
+export function getInitialUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('-auth-token')) {
+        const item = localStorage.getItem(key);
+        if (item) {
+          const parsed = JSON.parse(item);
+          if (parsed?.user?.id) return parsed.user.id;
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 const EVENT_SETTINGS_UPDATED = 'izifacture_settings_updated';
 
 interface SettingsDbRow {
@@ -72,33 +117,33 @@ interface SettingsDbRow {
   invoice_footer_notes?: string;
 }
 
-function mapDbToSettings(row: SettingsDbRow): CompanySettings {
+function mapDbToSettings(row: SettingsDbRow, fallback: CompanySettings = DEFAULT_SETTINGS): CompanySettings {
   return {
-    companyName: row.company_name ?? DEFAULT_SETTINGS.companyName,
-    tagline: row.tagline ?? DEFAULT_SETTINGS.tagline,
-    rccm: row.rccm ?? DEFAULT_SETTINGS.rccm,
-    nif: row.nif ?? DEFAULT_SETTINGS.nif,
-    currency: row.currency ?? DEFAULT_SETTINGS.currency,
-    vatRate: Number(row.vat_rate ?? DEFAULT_SETTINGS.vatRate),
-    phone: row.phone ?? DEFAULT_SETTINGS.phone,
-    email: row.email ?? DEFAULT_SETTINGS.email,
-    website: row.website ?? DEFAULT_SETTINGS.website,
-    address: row.address ?? DEFAULT_SETTINGS.address,
-    city: row.city ?? DEFAULT_SETTINGS.city,
-    country: row.country ?? DEFAULT_SETTINGS.country,
-    bankName: row.bank_name ?? DEFAULT_SETTINGS.bankName,
-    iban: row.iban ?? DEFAULT_SETTINGS.iban,
-    mobileMoney: row.mobile_money ?? DEFAULT_SETTINGS.mobileMoney,
-    invoicePrefix: row.invoice_prefix ?? DEFAULT_SETTINGS.invoicePrefix,
-    quotePrefix: row.quote_prefix ?? DEFAULT_SETTINGS.quotePrefix,
-    paymentTermsDays: Number(row.payment_terms_days ?? DEFAULT_SETTINGS.paymentTermsDays),
-    invoiceFooterNotes: row.invoice_footer_notes ?? DEFAULT_SETTINGS.invoiceFooterNotes,
+    companyName: row.company_name ?? fallback.companyName,
+    tagline: row.tagline ?? fallback.tagline,
+    rccm: row.rccm ?? fallback.rccm,
+    nif: row.nif ?? fallback.nif,
+    currency: row.currency ?? fallback.currency,
+    vatRate: Number(row.vat_rate ?? fallback.vatRate),
+    phone: row.phone ?? fallback.phone,
+    email: row.email ?? fallback.email,
+    website: row.website ?? fallback.website,
+    address: row.address ?? fallback.address,
+    city: row.city ?? fallback.city,
+    country: row.country ?? fallback.country,
+    bankName: row.bank_name ?? fallback.bankName,
+    iban: row.iban ?? fallback.iban,
+    mobileMoney: row.mobile_money ?? fallback.mobileMoney,
+    invoicePrefix: row.invoice_prefix ?? fallback.invoicePrefix,
+    quotePrefix: row.quote_prefix ?? fallback.quotePrefix,
+    paymentTermsDays: Number(row.payment_terms_days ?? fallback.paymentTermsDays),
+    invoiceFooterNotes: row.invoice_footer_notes ?? fallback.invoiceFooterNotes,
   };
 }
 
-function mapSettingsToDb(settings: CompanySettings) {
+function mapSettingsToDb(settings: CompanySettings, targetId: string) {
   return {
-    id: 'default',
+    id: targetId,
     company_name: settings.companyName,
     tagline: settings.tagline,
     rccm: settings.rccm,
@@ -134,13 +179,14 @@ export interface SettingsStoreValue {
 const SettingsStoreContext = createContext<SettingsStoreValue | null>(null);
 
 // ─── Provider global SettingsStoreProvider ──────────────────────────────────
-// Initialise les paramètres depuis localStorage immédiatement (0ms)
-// et effectue une synchronisation unique en arrière-plan avec Supabase.
+// Isole les boutiques par utilisateur : chaque compte possède sa propre boutique.
 export function SettingsStoreProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<CompanySettings>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY_SETTINGS);
+        const uid = getInitialUserId();
+        const key = uid ? `izifacture_settings_${uid}` : 'izifacture_settings_v1';
+        const stored = localStorage.getItem(key);
         if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
       } catch {
         // Fallback
@@ -148,25 +194,82 @@ export function SettingsStoreProvider({ children }: { children: React.ReactNode 
     }
     return DEFAULT_SETTINGS;
   });
+
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Charger depuis Supabase une seule fois au montage
+  // Charger depuis Supabase pour l'utilisateur connecté
   const fetchSettingsFromSupabase = useCallback(async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        // Mode invité ou déconnecté : lecture de 'default'
+        const { data } = await supabase
+          .from('company_settings')
+          .select('*')
+          .eq('id', 'default')
+          .maybeSingle();
+        if (data) {
+          const loaded = mapDbToSettings(data as SettingsDbRow, DEFAULT_SETTINGS);
+          setSettings(loaded);
+        }
+        setIsLoaded(true);
+        return;
+      }
+
+      // Utilisateur authentifié : recherche de sa boutique dédiée
+      const targetId = user.id;
+      const storageKey = `izifacture_settings_${targetId}`;
+
       const { data, error } = await supabase
         .from('company_settings')
         .select('*')
-        .eq('id', 'default')
+        .eq('id', targetId)
         .maybeSingle();
 
       if (error) {
         console.warn('Supabase fetch error for settings:', error.message);
       } else if (data) {
-        const loaded = mapDbToSettings(data as SettingsDbRow);
+        // Boutique personnalisée trouvée
+        const loaded = mapDbToSettings(data as SettingsDbRow, createDefaultSettingsForUser(user));
         setSettings(loaded);
         try {
-          localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(loaded));
+          localStorage.setItem(storageKey, JSON.stringify(loaded));
         } catch { /* storage unavailable */ }
+      } else {
+        // Pas encore de boutique pour cet utilisateur
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', targetId)
+          .maybeSingle();
+
+        const isAdmin = profile?.role === 'admin';
+
+        if (isAdmin) {
+          // Administrateur (Cyrille) : fallback sur la boutique 'default' (IziFacture)
+          const { data: defData } = await supabase
+            .from('company_settings')
+            .select('*')
+            .eq('id', 'default')
+            .maybeSingle();
+
+          const loaded = defData ? mapDbToSettings(defData as SettingsDbRow, DEFAULT_SETTINGS) : DEFAULT_SETTINGS;
+          setSettings(loaded);
+          // Persistance sous l'ID admin pour isolation future
+          try {
+            await supabase.from('company_settings').upsert(mapSettingsToDb(loaded, targetId));
+            localStorage.setItem(storageKey, JSON.stringify(loaded));
+          } catch { /* ignore */ }
+        } else {
+          // Nouvel utilisateur standard : création de sa propre boutique vierge
+          const cleanUserDefault = createDefaultSettingsForUser(user);
+          setSettings(cleanUserDefault);
+          try {
+            await supabase.from('company_settings').upsert(mapSettingsToDb(cleanUserDefault, targetId));
+            localStorage.setItem(storageKey, JSON.stringify(cleanUserDefault));
+          } catch { /* ignore */ }
+        }
       }
     } catch (err) {
       console.warn('Error fetching settings from Supabase:', err);
@@ -178,9 +281,30 @@ export function SettingsStoreProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     fetchSettingsFromSupabase();
 
+    // Réagir aux changements de connexion (connexion nouvel utilisateur / déconnexion)
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setSettings(DEFAULT_SETTINGS);
+        setIsLoaded(true);
+      } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const u = session?.user;
+        if (u) {
+          const cached = localStorage.getItem(`izifacture_settings_${u.id}`);
+          if (cached) {
+            try { setSettings(JSON.parse(cached)); } catch { /* ignore */ }
+          } else {
+            setSettings(createDefaultSettingsForUser(u));
+          }
+        }
+        fetchSettingsFromSupabase();
+      }
+    });
+
     const handleUpdate = () => {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY_SETTINGS);
+        const uid = getInitialUserId();
+        const key = uid ? `izifacture_settings_${uid}` : 'izifacture_settings_v1';
+        const stored = localStorage.getItem(key);
         if (stored) {
           setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
         }
@@ -192,26 +316,32 @@ export function SettingsStoreProvider({ children }: { children: React.ReactNode 
     window.addEventListener(EVENT_SETTINGS_UPDATED, handleUpdate);
     window.addEventListener('storage', handleUpdate);
 
-    // Écoute Realtime sur Supabase (uniquement au niveau racine du Provider)
+    // Écoute Realtime sur Supabase
     const channelId = `settings_rt_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
     const channel = supabase
       .channel(channelId)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'company_settings' },
-        (payload) => {
+        async (payload) => {
           if (payload.new) {
-            const updated = mapDbToSettings(payload.new as SettingsDbRow);
-            setSettings(updated);
-            try {
-              localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(updated));
-            } catch { /* storage unavailable */ }
+            const { data: { user } } = await supabase.auth.getUser();
+            const currentTargetId = user?.id || 'default';
+            const row = payload.new as SettingsDbRow & { id?: string };
+            if (row.id === currentTargetId) {
+              const updated = mapDbToSettings(row, createDefaultSettingsForUser(user));
+              setSettings(updated);
+              try {
+                localStorage.setItem(`izifacture_settings_${currentTargetId}`, JSON.stringify(updated));
+              } catch { /* storage unavailable */ }
+            }
           }
         }
       )
       .subscribe();
 
     return () => {
+      authSub.subscription.unsubscribe();
       window.removeEventListener(EVENT_SETTINGS_UPDATED, handleUpdate);
       window.removeEventListener('storage', handleUpdate);
       supabase.removeChannel(channel);
@@ -220,16 +350,23 @@ export function SettingsStoreProvider({ children }: { children: React.ReactNode 
 
   const saveSettings = async (newSettings: CompanySettings) => {
     setSettings(newSettings);
+
+    let targetId = 'default';
     try {
-      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(newSettings));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) targetId = user.id;
+    } catch { /* ignore */ }
+
+    try {
+      localStorage.setItem(`izifacture_settings_${targetId}`, JSON.stringify(newSettings));
       window.dispatchEvent(new Event(EVENT_SETTINGS_UPDATED));
     } catch (e) {
       console.error('Error saving settings to localStorage:', e);
     }
 
     try {
-      const dbData = mapSettingsToDb(newSettings);
-      const { error } = await supabase.from('company_settings').upsert(dbData);
+      const dbData = mapSettingsToDb(newSettings, targetId);
+      const { error } = await supabase.from('company_settings').upsert(dbData, { onConflict: 'id' });
       if (error) {
         console.error('Supabase error upserting settings:', error.message);
       }
@@ -245,7 +382,9 @@ export function SettingsStoreProvider({ children }: { children: React.ReactNode 
   };
 
   const resetSettings = async () => {
-    await saveSettings(DEFAULT_SETTINGS);
+    const { data: { user } } = await supabase.auth.getUser();
+    const cleanDefault = createDefaultSettingsForUser(user);
+    await saveSettings(cleanDefault);
   };
 
   const value: SettingsStoreValue = {

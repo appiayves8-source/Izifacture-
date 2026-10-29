@@ -233,6 +233,25 @@ interface InvoiceStoreValue {
 
 const InvoiceStoreContext = createContext<InvoiceStoreValue | null>(null);
 
+function getInitialUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('-auth-token')) {
+        const item = localStorage.getItem(key);
+        if (item) {
+          const parsed = JSON.parse(item);
+          if (parsed?.user?.id) return parsed.user.id;
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 // ─── Provider global — monté une seule fois dans layout.tsx ──────────────────
 // Résout la lenteur : 1 seul appel Supabase au login, 0 appel lors des navigations
 
@@ -240,21 +259,27 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY_INVOICES);
-        if (stored) return JSON.parse(stored);
+        const uid = getInitialUserId();
+        if (uid) {
+          const stored = localStorage.getItem(`izifacture_invoices_${uid}`);
+          if (stored) return JSON.parse(stored);
+        }
       } catch { /* fallback */ }
     }
-    return INITIAL_INVOICES;
+    return [];
   });
 
   const [clients, setClients] = useState<Client[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY_CLIENTS);
-        if (stored) return JSON.parse(stored);
+        const uid = getInitialUserId();
+        if (uid) {
+          const stored = localStorage.getItem(`izifacture_clients_${uid}`);
+          if (stored) return JSON.parse(stored);
+        }
       } catch { /* fallback */ }
     }
-    return INITIAL_CLIENTS;
+    return [];
   });
 
   const [isLoaded, setIsLoaded] = useState(false);
@@ -262,19 +287,26 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
   const fetchDataFromSupabase = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        setInvoices([]);
+        setClients([]);
+        setIsLoaded(true);
+        return;
+      }
+
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      const isAdmin = profile?.role === 'admin';
+
       let clientsQuery = supabase.from('clients').select('*').order('name');
       let invoicesQuery = supabase
         .from('invoices')
         .select('*, client:clients(*), items:invoice_items(*)')
         .order('issue_date', { ascending: false });
 
-      if (user) {
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-        const isAdmin = profile?.role === 'admin';
-        if (!isAdmin) {
-          clientsQuery = clientsQuery.eq('user_id', user.id);
-          invoicesQuery = invoicesQuery.eq('user_id', user.id);
-        }
+      if (!isAdmin) {
+        clientsQuery = clientsQuery.eq('user_id', user.id);
+        invoicesQuery = invoicesQuery.eq('user_id', user.id);
       }
 
       const { data: dbClients, error: clientsErr } = await clientsQuery;
@@ -304,11 +336,14 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
         setClients(clientsWithTotals);
 
         try {
-          localStorage.setItem(STORAGE_KEY_INVOICES, JSON.stringify(parsedInvoices));
-          localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(clientsWithTotals));
+          localStorage.setItem(`izifacture_invoices_${user.id}`, JSON.stringify(parsedInvoices));
+          localStorage.setItem(`izifacture_clients_${user.id}`, JSON.stringify(clientsWithTotals));
         } catch { /* storage unavailable */ }
       } else if (!clientsErr && dbClients) {
         setClients(parsedClients);
+        try {
+          localStorage.setItem(`izifacture_clients_${user.id}`, JSON.stringify(parsedClients));
+        } catch { /* storage unavailable */ }
       }
     } catch (err) {
       console.warn('Erreur lors du chargement des données Supabase:', err);
@@ -320,6 +355,26 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     fetchDataFromSupabase();
 
+    // Réagir immédiatement aux changements de session auth (login/logout/switch compte)
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setInvoices([]);
+        setClients([]);
+        setIsLoaded(true);
+      } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const u = session?.user;
+        if (u) {
+          try {
+            const cachedInvs = localStorage.getItem(`izifacture_invoices_${u.id}`);
+            const cachedClis = localStorage.getItem(`izifacture_clients_${u.id}`);
+            if (cachedInvs) setInvoices(JSON.parse(cachedInvs));
+            if (cachedClis) setClients(JSON.parse(cachedClis));
+          } catch { /* ignore */ }
+        }
+        fetchDataFromSupabase();
+      }
+    });
+
     // Un seul channel Realtime par Provider (pas par composant/page)
     const channelId = `invoices_rt_global_${Date.now()}`;
     const invoiceChannel = supabase
@@ -329,17 +384,28 @@ export function InvoiceStoreProvider({ children }: { children: React.ReactNode }
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoice_items' }, () => { fetchDataFromSupabase(); })
       .subscribe();
 
-    return () => { supabase.removeChannel(invoiceChannel); };
+    return () => {
+      authSub.subscription.unsubscribe();
+      supabase.removeChannel(invoiceChannel);
+    };
   }, [fetchDataFromSupabase]);
 
-  const saveInvoices = (newInvoices: Invoice[]) => {
+  const saveInvoices = async (newInvoices: Invoice[]) => {
     setInvoices(newInvoices);
-    try { localStorage.setItem(STORAGE_KEY_INVOICES, JSON.stringify(newInvoices)); } catch { /* ignore */ }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const key = user?.id ? `izifacture_invoices_${user.id}` : 'izifacture_invoices_guest';
+      localStorage.setItem(key, JSON.stringify(newInvoices));
+    } catch { /* ignore */ }
   };
 
-  const saveClients = (newClients: Client[]) => {
+  const saveClients = async (newClients: Client[]) => {
     setClients(newClients);
-    try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(newClients)); } catch { /* ignore */ }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const key = user?.id ? `izifacture_clients_${user.id}` : 'izifacture_clients_guest';
+      localStorage.setItem(key, JSON.stringify(newClients));
+    } catch { /* ignore */ }
   };
 
   const addInvoice = async (
@@ -599,18 +665,18 @@ export function useInvoiceStore(): InvoiceStoreValue {
   const ctx = useContext(InvoiceStoreContext);
   if (!ctx) {
     return {
-      invoices: INITIAL_INVOICES,
-      clients: INITIAL_CLIENTS,
+      invoices: [],
+      clients: [],
       isLoaded: true,
-      addInvoice: async () => INITIAL_INVOICES[0],
+      addInvoice: async () => ({ id: '', invoiceNumber: '', clientId: '', client: { id: '', name: '', email: '', phone: '', address: '', city: '', country: '', totalBilled: 0, invoicesCount: 0 }, issueDate: '', dueDate: '', status: 'brouillon', serviceType: '', items: [], subtotal: 0, taxRate: 18, taxAmount: 0, amount: 0 }),
       updateInvoice: () => null,
       deleteInvoice: () => false,
       updateInvoiceStatus: () => null,
-      getInvoice: (id: string) => INITIAL_INVOICES.find((inv) => inv.id === id),
-      addClient: async () => INITIAL_CLIENTS[0],
+      getInvoice: () => undefined,
+      addClient: async () => ({ id: '', name: '', email: '', phone: '', address: '', city: '', country: '', totalBilled: 0, invoicesCount: 0 }),
       updateClient: () => null,
       deleteClient: () => false,
-      getClient: (id: string) => INITIAL_CLIENTS.find((cli) => cli.id === id),
+      getClient: () => undefined,
       refreshData: async () => {},
     };
   }

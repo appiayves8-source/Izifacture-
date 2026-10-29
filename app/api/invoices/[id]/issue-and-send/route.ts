@@ -114,14 +114,26 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // URL de paiement stable et pérenne basée sur l'identifiant réel de la facture
     const paymentUrl = `${appUrl}/pay/${invoice.id}`;
 
-    // Récupération des paramètres entreprise
-    const { data: settings } = await supabaseAdmin
-      .from('company_settings')
-      .select('*')
-      .limit(1)
-      .maybeSingle();
+    // Récupération des paramètres entreprise de l'émetteur
+    let settings = null;
+    if (invoice.user_id) {
+      const { data: userSettings } = await supabaseAdmin
+        .from('company_settings')
+        .select('*')
+        .eq('id', invoice.user_id)
+        .maybeSingle();
+      settings = userSettings;
+    }
+    if (!settings) {
+      const { data: defaultSettings } = await supabaseAdmin
+        .from('company_settings')
+        .select('*')
+        .eq('id', 'default')
+        .maybeSingle();
+      settings = defaultSettings;
+    }
 
-    const companyName = settings?.company_name || 'IziFacture SARL';
+    const companyName = settings?.company_name || 'Votre Fournisseur';
     const nowIso = new Date().toISOString();
 
     // 5. Mise à jour de l'état d'émission de la facture (colonnes réelles de Supabase)

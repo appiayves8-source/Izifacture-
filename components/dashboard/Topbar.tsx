@@ -98,7 +98,10 @@ export default function Topbar({
 
   // Sync notifications from real database invoices
   useEffect(() => {
-    if (!invoices || invoices.length === 0) return;
+    if (!invoices || invoices.length === 0) {
+      setNotifications([]);
+      return;
+    }
 
     const realNotifs: NotificationItem[] = invoices.slice(0, 6).map((inv) => {
       let type = 'sent';

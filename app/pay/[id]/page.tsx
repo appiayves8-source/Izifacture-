@@ -74,12 +74,24 @@ export default async function PublicInvoicePaymentPage({ params }: PayPageProps)
     }];
   }
 
-  // Récupération des paramètres d'entreprise
-  const { data: settings } = await supabaseAdmin
-    .from('company_settings')
-    .select('*')
-    .limit(1)
-    .maybeSingle();
+  // Récupération des paramètres d'entreprise de l'émetteur de la facture
+  let settings = null;
+  if (invoice?.user_id) {
+    const { data: userSettings } = await supabaseAdmin
+      .from('company_settings')
+      .select('*')
+      .eq('id', invoice.user_id)
+      .maybeSingle();
+    settings = userSettings;
+  }
+  if (!settings) {
+    const { data: defaultSettings } = await supabaseAdmin
+      .from('company_settings')
+      .select('*')
+      .eq('id', 'default')
+      .maybeSingle();
+    settings = defaultSettings;
+  }
 
   if (!invoice) {
     return (

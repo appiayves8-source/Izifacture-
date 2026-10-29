@@ -390,7 +390,7 @@ function QuoteStatusBadge({ status }: { status: QuoteStatus }) {
 export default function QuotesPage() {
   const router = useRouter();
   const { clients } = useInvoiceStore();
-  const [quotes, setQuotes] = useState<Quote[]>(INITIAL_QUOTES);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
@@ -399,16 +399,19 @@ export default function QuotesPage() {
   const loadQuotesFromSupabase = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setQuotes([]);
+        return;
+      }
+
       let query = supabase
         .from('quotes')
         .select('*, client:clients(*), items:quote_items(*)')
         .order('issue_date', { ascending: false });
 
-      if (user) {
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-        if (profile?.role !== 'admin') {
-          query = query.eq('user_id', user.id);
-        }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (profile?.role !== 'admin') {
+        query = query.eq('user_id', user.id);
       }
 
       const { data, error } = await query;

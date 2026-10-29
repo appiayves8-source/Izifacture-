@@ -284,12 +284,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
     setRole('user');
 
-    // 2. Nettoyage immédiat des caches locaux
+    // 2. Nettoyage immédiat de tous les caches locaux izifacture_*
     if (typeof window !== 'undefined') {
       try {
-        localStorage.removeItem('izifacture_sub_cache_v1');
-        localStorage.removeItem('izifacture_invoices_v1');
-        localStorage.removeItem('izifacture_clients_v1');
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('izifacture_') || k.startsWith('sb-'))) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
       } catch { }
     }
 
